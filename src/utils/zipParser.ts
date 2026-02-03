@@ -1,46 +1,76 @@
 import JSZip from 'jszip';
 import type { ZipImageEntry } from '@/types/formula';
 
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.emf', '.wmf'];
+// Supported image formats (browser-compatible)
+const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+// Legacy formats that we skip with a warning
+const SKIPPED_EXTENSIONS = ['.wmf', '.emf', '.tiff'];
 
 export async function parseZip(file: File): Promise<ZipImageEntry[]> {
-  const zip = new JSZip();
-  const contents = await zip.loadAsync(file);
-  
-  const entries: ZipImageEntry[] = [];
-  
-  const filePromises = Object.entries(contents.files).map(async ([path, zipEntry]) => {
-    if (zipEntry.dir) return null;
+  try {
+    const zip = new JSZip();
+    const contents = await zip.loadAsync(file);
     
-    const filename = path.split('/').pop() || path;
-    const extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+    const entries: ZipImageEntry[] = [];
+    const skippedFiles: string[] = [];
     
-    if (!IMAGE_EXTENSIONS.includes(extension)) return null;
+    console.log(`[ZIP Parser] Processing archive: ${file.name}`);
     
-    try {
-      const blob = await zipEntry.async('blob');
-      const url = URL.createObjectURL(blob);
+    const filePromises = Object.entries(contents.files).map(async ([path, zipEntry]) => {
+      if (zipEntry.dir) return null;
       
-      return {
-        filename,
-        blob,
-        url,
-      };
-    } catch (error) {
-      console.error(`Failed to extract ${filename}:`, error);
-      return null;
+      const filename = path.split('/').pop() || path;
+      const extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+      
+      // Skip unsupported formats with logging
+      if (SKIPPED_EXTENSIONS.includes(extension)) {
+        skippedFiles.push(filename);
+        console.warn(`[ZIP Parser] Skipping unsupported format: ${filename}`);
+        return null;
+      }
+      
+      // Only process supported image formats
+      if (!SUPPORTED_IMAGE_EXTENSIONS.includes(extension)) {
+        console.log(`[ZIP Parser] Ignoring non-image file: ${filename}`);
+        return null;
+      }
+      
+      try {
+        const blob = await zipEntry.async('blob');
+        const url = URL.createObjectURL(blob);
+        
+        console.log(`[ZIP Parser] Extracted: ${filename}`);
+        
+        return {
+          filename,
+          blob,
+          url,
+        };
+      } catch (error) {
+        console.error(`[ZIP Parser] Failed to extract ${filename}:`, error);
+        return null;
+      }
+    });
+    
+    const results = await Promise.all(filePromises);
+    
+    for (const result of results) {
+      if (result) {
+        entries.push(result);
+      }
     }
-  });
-  
-  const results = await Promise.all(filePromises);
-  
-  for (const result of results) {
-    if (result) {
-      entries.push(result);
+    
+    if (skippedFiles.length > 0) {
+      console.warn(`[ZIP Parser] Skipped ${skippedFiles.length} unsupported files: ${skippedFiles.join(', ')}`);
     }
+    
+    console.log(`[ZIP Parser] Successfully extracted ${entries.length} images`);
+    
+    return entries;
+  } catch (error) {
+    console.error('[ZIP Parser] Failed to parse ZIP:', error);
+    return []; // Return empty array instead of throwing
   }
-  
-  return entries;
 }
 
 export function matchImageToRef(

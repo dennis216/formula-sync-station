@@ -59,11 +59,21 @@ const Index = () => {
       // Parse ZIP
       setProcessingMessage('Extracting images from archive...');
       setProcessingProgress(20);
-      const images = await parseZip(zipFile);
-      setZipImages(images);
+      
+      let images: ZipImageEntry[] = [];
+      try {
+        images = await parseZip(zipFile);
+        setZipImages(images);
+      } catch (zipError) {
+        const errorMsg = zipError instanceof Error ? zipError.message : 'Unknown ZIP error';
+        console.error('[ZIP] Parse failed:', zipError);
+        toast.error(`ZIP extraction failed: ${errorMsg}`);
+        setIsProcessing(false);
+        return;
+      }
       
       if (images.length === 0) {
-        toast.error('No images found in ZIP archive');
+        toast.error('No supported images found in ZIP. Only PNG/JPG/JPEG are supported. WMF/EMF files are skipped.');
         setIsProcessing(false);
         return;
       }
@@ -71,10 +81,23 @@ const Index = () => {
       // Parse PDF
       setProcessingMessage('Parsing PDF index...');
       setProcessingProgress(50);
-      const pdfEntries = await parsePDFSimple(pdfFile);
+      
+      let pdfEntries: { posNumber: number; imageRef: string }[] = [];
+      try {
+        pdfEntries = await parsePDFSimple(pdfFile);
+      } catch (pdfError) {
+        const errorMsg = pdfError instanceof Error ? pdfError.message : 'Unknown PDF error';
+        console.error('[PDF] Parse failed:', pdfError);
+        toast.error(`PDF parsing failed: ${errorMsg}`);
+        setIsProcessing(false);
+        return;
+      }
 
       if (pdfEntries.length === 0) {
-        toast.error('No position entries found in PDF');
+        toast.error(
+          'No "Pos #" entries found in PDF. The PDF may lack a text layer (scanned document) or use a different format.',
+          { duration: 6000 }
+        );
         setIsProcessing(false);
         return;
       }
@@ -91,8 +114,9 @@ const Index = () => {
         `Loaded ${pdfEntries.length} positions with ${images.length} images`
       );
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Processing error:', error);
-      toast.error('Failed to process files. Please check the file formats.');
+      toast.error(`Failed to process files: ${errorMsg}`, { duration: 5000 });
     } finally {
       setIsProcessing(false);
       setProcessingProgress(undefined);
