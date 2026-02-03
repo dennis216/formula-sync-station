@@ -1,12 +1,20 @@
-import * as pdfjsLib from 'pdfjs-dist';
 import type { ParsedPDFEntry } from '@/types/formula';
 
-// Set the worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+// Dynamically import pdfjs-dist to avoid top-level await issues
+let pdfjsLib: typeof import('pdfjs-dist') | null = null;
+
+async function getPdfJs() {
+  if (!pdfjsLib) {
+    pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+  }
+  return pdfjsLib;
+}
 
 export async function parsePDF(file: File): Promise<ParsedPDFEntry[]> {
+  const pdfjs = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   
   const entries: ParsedPDFEntry[] = [];
   const seenPos = new Set<number>();
@@ -19,7 +27,6 @@ export async function parsePDF(file: File): Promise<ParsedPDFEntry[]> {
       .join(' ');
 
     // Pattern to match "Pos #NUMBER" followed by "imageNUMBER" or similar patterns
-    // Updated regex to be more flexible with the patterns
     const posPattern = /Pos\s*#?\s*(\d+)/gi;
     const imagePattern = /image\s*(\d+)/gi;
     
@@ -52,8 +59,9 @@ export async function parsePDF(file: File): Promise<ParsedPDFEntry[]> {
 
 // Alternative: Simple sequential extraction
 export async function parsePDFSimple(file: File): Promise<ParsedPDFEntry[]> {
+  const pdfjs = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   
   let fullText = '';
   

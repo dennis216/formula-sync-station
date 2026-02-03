@@ -12,6 +12,7 @@ import { exportToJSON, exportToTXT, downloadFile } from '@/utils/exportUtils';
 import type { ZipImageEntry } from '@/types/formula';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [zipFile, setZipFile] = useState<File | null>(null);
@@ -118,17 +119,44 @@ const Index = () => {
     setItemProcessing(id, true);
 
     try {
-      // Simulate AI processing for now (will be replaced with actual API call)
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Convert blob URL to base64
+      const response = await fetch(item.imageUrl);
+      const blob = await response.blob();
+      const reader = new FileReader();
       
-      // Placeholder LaTeX result
-      const placeholderLatex = '\\frac{d}{dx}\\left( x^2 + 2x \\right) = 2x + 2';
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onloadend = () => {
+          resolve(reader.result as string);
+        };
+        reader.readAsDataURL(blob);
+      });
       
-      updateItemLatex(id, placeholderLatex);
-      toast.success(`POS #${item.posNumber} converted to LaTeX`);
+      const imageBase64 = await base64Promise;
+
+      // Call the edge function
+      const { data, error } = await supabase.functions.invoke('recognize-formula', {
+        body: { imageBase64 },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'AI recognition failed');
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const latex = data.latex;
+      
+      if (latex.startsWith('ERROR:')) {
+        toast.error(`POS #${item.posNumber}: ${latex}`);
+      } else {
+        updateItemLatex(id, latex);
+        toast.success(`POS #${item.posNumber} converted to LaTeX`);
+      }
     } catch (error) {
       console.error('AI recognition error:', error);
-      toast.error('AI recognition failed. Please try again.');
+      toast.error(`AI recognition failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setItemProcessing(id, false);
     }
