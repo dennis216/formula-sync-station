@@ -7,22 +7,22 @@ import { ExportPanel } from '@/components/ExportPanel';
 import { ProcessingOverlay } from '@/components/ProcessingOverlay';
 import { useFormulaItems } from '@/hooks/useFormulaItems';
 import { parseZip, cleanupImageUrls } from '@/utils/zipParser';
-import { extractSalvagedImages, cleanupSalvagedUrls } from '@/utils/pdfImageExtractor';
+import { parseSalvageZip, cleanupSalvagedZipUrls } from '@/utils/salvageZipParser';
 import { exportToJSON, exportToTXT, downloadFile } from '@/utils/exportUtils';
 import { exportToPDF, type PdfExportProgress } from '@/utils/pdfExport';
-import type { ZipImageEntry, SalvagedPDFImage } from '@/types/formula';
+import type { ZipImageEntry, SalvagedZipImage } from '@/types/formula';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
-  const [zipFile, setZipFile] = useState<File | null>(null);
-  const [salvagePdfFile, setSalvagePdfFile] = useState<File | null>(null);
+  const [baseZipFile, setBaseZipFile] = useState<File | null>(null);
+  const [salvageZipFile, setSalvageZipFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [processingProgress, setProcessingProgress] = useState<number | undefined>();
-  const [zipImages, setZipImages] = useState<ZipImageEntry[]>([]);
-  const [salvagedImages, setSalvagedImages] = useState<SalvagedPDFImage[]>([]);
+  const [baseZipImages, setBaseZipImages] = useState<ZipImageEntry[]>([]);
+  const [salvagedImages, setSalvagedImages] = useState<SalvagedZipImage[]>([]);
   const [hasProcessed, setHasProcessed] = useState(false);
 
   const {
@@ -41,15 +41,15 @@ const Index = () => {
   } = useFormulaItems();
 
   const handleFilesSelected = useCallback(
-    (zip: File | null, pdf: File | null) => {
-      setZipFile(zip);
-      setSalvagePdfFile(pdf);
+    (base: File | null, salvage: File | null) => {
+      setBaseZipFile(base);
+      setSalvageZipFile(salvage);
     },
     []
   );
 
   const handleProcess = async () => {
-    if (!zipFile) {
+    if (!baseZipFile) {
       toast.error('Please upload the original ZIP file');
       return;
     }
@@ -59,17 +59,17 @@ const Index = () => {
 
     try {
       // Clean up previous URLs
-      cleanupImageUrls(zipImages);
-      cleanupSalvagedUrls(salvagedImages);
+      cleanupImageUrls(baseZipImages);
+      cleanupSalvagedZipUrls(salvagedImages);
 
-      // Step 1: Parse ZIP (determines POS order and original images)
+      // Step 1: Parse base ZIP (determines POS order and original images)
       setProcessingMessage('Extracting original images from archive...');
       setProcessingProgress(15);
       
       let images: ZipImageEntry[] = [];
       try {
-        images = await parseZip(zipFile);
-        setZipImages(images);
+        images = await parseZip(baseZipFile);
+        setBaseZipImages(images);
       } catch (zipError) {
         const errorMsg = zipError instanceof Error ? zipError.message : 'Unknown ZIP error';
         console.error('[ZIP] Parse failed:', zipError);
@@ -84,7 +84,7 @@ const Index = () => {
         return;
       }
 
-      console.log(`[Process] Found ${images.length} images in ZIP`);
+      console.log(`[Process] Found ${images.length} images in base ZIP`);
 
       // Step 2: Build initial items from ZIP (POS order based on filenames)
       setProcessingMessage('Building formula list from original document...');
@@ -97,32 +97,32 @@ const Index = () => {
       }));
       
       buildItems(pdfEntries, images, true);
-      console.log(`[Process] Built ${pdfEntries.length} items from ZIP`);
+      console.log(`[Process] Built ${pdfEntries.length} items from base ZIP`);
 
-      // Step 3: If salvage PDF is provided, extract and match images
-      let extractedSalvaged: SalvagedPDFImage[] = [];
+      // Step 3: If salvage ZIP is provided, extract and match images by filename number
+      let extractedSalvaged: SalvagedZipImage[] = [];
       
-      if (salvagePdfFile) {
-        setProcessingMessage('Extracting salvaged images from PDF...');
+      if (salvageZipFile) {
+        setProcessingMessage('Extracting salvaged PNGs from patch ZIP...');
         setProcessingProgress(55);
         
         try {
-          extractedSalvaged = await extractSalvagedImages(salvagePdfFile);
+          extractedSalvaged = await parseSalvageZip(salvageZipFile);
           setSalvagedImages(extractedSalvaged);
-          console.log(`[Process] Extracted ${extractedSalvaged.length} salvaged images from PDF`);
+          console.log(`[Process] Extracted ${extractedSalvaged.length} salvaged images from patch ZIP`);
           
           if (extractedSalvaged.length > 0) {
-            setProcessingMessage('Matching and restoring images...');
+            setProcessingMessage('Matching and stitching images...');
             setProcessingProgress(75);
             applySalvagedImages(extractedSalvaged);
             
-            toast.success(`${extractedSalvaged.length} Images Salvaged and matched!`);
+            toast.success(`${extractedSalvaged.length} Images Salvaged and stitched!`);
           } else {
-            toast.warning('No images with POS numbers found in PDF. Check format.');
+            toast.warning('No PNG images found in salvage ZIP.');
           }
-        } catch (pdfError) {
-          console.error('[PDF] Salvage extraction failed:', pdfError);
-          toast.warning('Could not extract images from salvage PDF');
+        } catch (salvageError) {
+          console.error('[Salvage ZIP] Extraction failed:', salvageError);
+          toast.warning('Could not extract images from salvage ZIP');
         }
       }
 
@@ -146,11 +146,11 @@ const Index = () => {
   };
 
   const handleReset = () => {
-    cleanupImageUrls(zipImages);
-    cleanupSalvagedUrls(salvagedImages);
-    setZipFile(null);
-    setSalvagePdfFile(null);
-    setZipImages([]);
+    cleanupImageUrls(baseZipImages);
+    cleanupSalvagedZipUrls(salvagedImages);
+    setBaseZipFile(null);
+    setSalvageZipFile(null);
+    setBaseZipImages([]);
     setSalvagedImages([]);
     clearItems();
     setHasProcessed(false);
@@ -310,11 +310,11 @@ const Index = () => {
         {/* Upload Section */}
         <section>
           <DualFileUploader
-            zipFile={zipFile}
-            salvagePdfFile={salvagePdfFile}
+            baseZipFile={baseZipFile}
+            salvageZipFile={salvageZipFile}
             onFilesSelected={handleFilesSelected}
             isProcessing={isProcessing}
-            zipImageCount={hasProcessed ? zipImages.length : undefined}
+            baseImageCount={hasProcessed ? baseZipImages.length : undefined}
             salvagedImageCount={hasProcessed ? stats.restored : undefined}
           />
 
@@ -322,7 +322,7 @@ const Index = () => {
           <div className="flex justify-center gap-4 mt-4">
             <Button
               onClick={handleProcess}
-              disabled={!zipFile || isProcessing}
+              disabled={!baseZipFile || isProcessing}
               className="action-button-cyan px-8"
             >
               <Play className="w-4 h-4 mr-2" />

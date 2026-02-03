@@ -1,92 +1,92 @@
 import React, { useCallback } from 'react';
-import { Upload, FileArchive, FileImage, CheckCircle2 } from 'lucide-react';
+import { Upload, FileArchive, CheckCircle2, Puzzle } from 'lucide-react';
 
 interface DualFileUploaderProps {
-  onFilesSelected: (zipFile: File | null, salvagePdfFile: File | null) => void;
-  zipFile: File | null;
-  salvagePdfFile: File | null;
+  onFilesSelected: (baseZipFile: File | null, salvageZipFile: File | null) => void;
+  baseZipFile: File | null;
+  salvageZipFile: File | null;
   isProcessing: boolean;
-  zipImageCount?: number;
+  baseImageCount?: number;
   salvagedImageCount?: number;
 }
 
 export const DualFileUploader: React.FC<DualFileUploaderProps> = ({
   onFilesSelected,
-  zipFile,
-  salvagePdfFile,
+  baseZipFile,
+  salvageZipFile,
   isProcessing,
-  zipImageCount,
+  baseImageCount,
   salvagedImageCount,
 }) => {
-  const handleZipDrop = useCallback(
+  const handleBaseDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       const file = e.dataTransfer.files[0];
       if (file && file.name.endsWith('.zip')) {
-        onFilesSelected(file, salvagePdfFile);
+        onFilesSelected(file, salvageZipFile);
       }
     },
-    [onFilesSelected, salvagePdfFile]
+    [onFilesSelected, salvageZipFile]
   );
 
-  const handlePdfDrop = useCallback(
+  const handleSalvageDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       const file = e.dataTransfer.files[0];
-      if (file && file.name.endsWith('.pdf')) {
-        onFilesSelected(zipFile, file);
+      if (file && file.name.endsWith('.zip')) {
+        onFilesSelected(baseZipFile, file);
       }
     },
-    [onFilesSelected, zipFile]
+    [onFilesSelected, baseZipFile]
   );
 
-  const handleZipChange = useCallback(
+  const handleBaseChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0] || null;
-      onFilesSelected(file, salvagePdfFile);
+      onFilesSelected(file, salvageZipFile);
     },
-    [onFilesSelected, salvagePdfFile]
+    [onFilesSelected, salvageZipFile]
   );
 
-  const handlePdfChange = useCallback(
+  const handleSalvageChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0] || null;
-      onFilesSelected(zipFile, file);
+      onFilesSelected(baseZipFile, file);
     },
-    [onFilesSelected, zipFile]
+    [onFilesSelected, baseZipFile]
   );
 
   const preventDefault = (e: React.DragEvent) => e.preventDefault();
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* LEFT: Original ZIP Upload */}
+      {/* LEFT: Source A (Base) - Original Docx ZIP */}
       <div
-        onDrop={handleZipDrop}
+        onDrop={handleBaseDrop}
         onDragOver={preventDefault}
         onDragEnter={preventDefault}
         className={`
           industrial-panel p-6 cursor-pointer transition-all duration-300
-          ${zipFile ? 'glow-border' : 'hover:border-primary/50'}
+          ${baseZipFile ? 'glow-border' : 'hover:border-primary/50'}
           ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
         `}
       >
         <label className="flex flex-col items-center gap-4 cursor-pointer">
-          <div className={`p-4 rounded-sm ${zipFile ? 'bg-primary/20' : 'bg-muted'}`}>
-            <FileArchive className={`w-10 h-10 ${zipFile ? 'text-primary' : 'text-muted-foreground'}`} />
+          <div className={`p-4 rounded-sm ${baseZipFile ? 'bg-primary/20' : 'bg-muted'}`}>
+            <FileArchive className={`w-10 h-10 ${baseZipFile ? 'text-primary' : 'text-muted-foreground'}`} />
           </div>
           
           <div className="text-center">
             <p className="text-sm font-bold uppercase tracking-wider text-foreground">
-              Original Source (ZIP)
+              Source A: Original Docx ZIP
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {zipFile ? zipFile.name : 'Drop or click to upload'}
+              {baseZipFile ? baseZipFile.name : 'Drop or click to upload'}
             </p>
-            {zipFile && zipImageCount !== undefined && (
+            {baseZipFile && baseImageCount !== undefined && (
               <div className="flex items-center justify-center gap-1 mt-2 text-xs text-primary">
                 <CheckCircle2 className="w-3 h-3" />
-                <span>Original Doc Linked • {zipImageCount} images</span>
+                <span>Original Doc Linked • {baseImageCount} images</span>
               </div>
             )}
           </div>
@@ -94,44 +94,44 @@ export const DualFileUploader: React.FC<DualFileUploaderProps> = ({
           <input
             type="file"
             accept=".zip"
-            onChange={handleZipChange}
+            onChange={handleBaseChange}
             className="hidden"
             disabled={isProcessing}
           />
           
-          {!zipFile && (
+          {!baseZipFile && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Upload className="w-4 h-4" />
-              <span>Extracted Word archive (.docx → .zip)</span>
+              <span>Defines structure & POS order</span>
             </div>
           )}
         </label>
       </div>
 
-      {/* RIGHT: Salvaged Images PDF Upload */}
+      {/* RIGHT: Source B (Patch) - Salvaged PNGs ZIP */}
       <div
-        onDrop={handlePdfDrop}
+        onDrop={handleSalvageDrop}
         onDragOver={preventDefault}
         onDragEnter={preventDefault}
         className={`
           industrial-panel p-6 cursor-pointer transition-all duration-300
-          ${salvagePdfFile ? 'glow-border' : 'hover:border-accent/50'}
+          ${salvageZipFile ? 'glow-border' : 'hover:border-accent/50'}
           ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
         `}
       >
         <label className="flex flex-col items-center gap-4 cursor-pointer">
-          <div className={`p-4 rounded-sm ${salvagePdfFile ? 'bg-accent/20' : 'bg-muted'}`}>
-            <FileImage className={`w-10 h-10 ${salvagePdfFile ? 'text-accent' : 'text-muted-foreground'}`} />
+          <div className={`p-4 rounded-sm ${salvageZipFile ? 'bg-accent/20' : 'bg-muted'}`}>
+            <Puzzle className={`w-10 h-10 ${salvageZipFile ? 'text-accent' : 'text-muted-foreground'}`} />
           </div>
           
           <div className="text-center">
             <p className="text-sm font-bold uppercase tracking-wider text-foreground">
-              Salvaged Images (PDF)
+              Source B: Salvaged PNGs ZIP
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {salvagePdfFile ? salvagePdfFile.name : 'Drop or click to upload'}
+              {salvageZipFile ? salvageZipFile.name : 'Drop or click to upload'}
             </p>
-            {salvagePdfFile && salvagedImageCount !== undefined && (
+            {salvageZipFile && salvagedImageCount !== undefined && (
               <div className="flex items-center justify-center gap-1 mt-2 text-xs text-accent">
                 <CheckCircle2 className="w-3 h-3" />
                 <span>{salvagedImageCount} Images Salvaged</span>
@@ -141,16 +141,16 @@ export const DualFileUploader: React.FC<DualFileUploaderProps> = ({
           
           <input
             type="file"
-            accept=".pdf"
-            onChange={handlePdfChange}
+            accept=".zip"
+            onChange={handleSalvageChange}
             className="hidden"
             disabled={isProcessing}
           />
           
-          {!salvagePdfFile && (
+          {!salvageZipFile && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Upload className="w-4 h-4" />
-              <span>Python-extracted clear images with POS #</span>
+              <span>PNG conversions from Python script</span>
             </div>
           )}
         </label>
