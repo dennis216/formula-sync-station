@@ -7,6 +7,7 @@ export interface FormulaItem {
   imageBlob: Blob | null; // Original blob for WMF/EMF files
   status: 'pending' | 'verified' | 'needs-modification' | 'missing';
   latex: string | null;
+  aiError: string | null; // Structured AI/format errors (e.g. WMF unsupported)
   isProcessing: boolean;
 }
 

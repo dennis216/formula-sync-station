@@ -111,6 +111,12 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
               onChange={(latex) => onLatexChange(item.id, latex)}
             />
           )}
+
+          {item.aiError && (
+            <div className="rounded-md border bg-muted p-2 text-xs text-foreground">
+              {item.aiError}
+            </div>
+          )}
         </div>
       </div>
     </div>
