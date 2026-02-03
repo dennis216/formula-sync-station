@@ -25,6 +25,7 @@ export function useFormulaItems() {
           imageRef: entry.imageRef,
           imageName: matchedImage?.filename || null,
           imageUrl: matchedImage?.url || null,
+          imageBlob: matchedImage?.blob || null, // Store the original blob
           status: matchedImage ? 'pending' : 'missing',
           latex: null,
           isProcessing: false,
