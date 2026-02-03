@@ -109,7 +109,7 @@ export async function exportToPDF(
       onProgress({
         current: i + 1,
         total: totalItems,
-        message: `正在导出第 ${i + 1}/${totalItems} 个...`,
+        message: `Exporting item ${i + 1} of ${totalItems}...`,
       });
     }
     
@@ -194,7 +194,7 @@ export async function exportToPDF(
       pdf.setFontSize(9);
       pdf.setFont('helvetica', 'italic');
       pdf.setTextColor(180, 100, 50);
-      pdf.text('[WMF/EMF格式 - 无法直接显示]', marginLeft, currentY + 5);
+      pdf.text('[WMF/EMF Format - Cannot display directly]', marginLeft, currentY + 5);
       
       // If LaTeX is available, show it instead
       if (item.latex && !item.latex.startsWith('ERROR:')) {
@@ -205,7 +205,7 @@ export async function exportToPDF(
         pdf.text(`LaTeX: ${latexPreview}`, marginLeft, currentY + 12);
         currentY += 20;
       } else {
-        pdf.text('[请使用 AI 识别获取 LaTeX]', marginLeft + 100, currentY + 5);
+        pdf.text('[Use AI Recognition to get LaTeX]', marginLeft + 100, currentY + 5);
         currentY += 15;
       }
       pdf.setTextColor(0, 0, 0);
@@ -240,7 +240,7 @@ export async function exportToPDF(
     onProgress({
       current: totalItems,
       total: totalItems,
-      message: '正在保存 PDF 文件...',
+      message: 'Saving PDF file...',
     });
   }
   

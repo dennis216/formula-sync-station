@@ -74,7 +74,7 @@ const Index = () => {
       }
       
       if (images.length === 0) {
-        toast.error('No supported images found in ZIP. Only PNG/JPG/JPEG are supported. WMF/EMF files are skipped.');
+        toast.error('No images found in ZIP. Please ensure the archive contains word/media/ folder.');
         setIsProcessing(false);
         return;
       }
@@ -109,8 +109,8 @@ const Index = () => {
         }));
         
         const message = pdfFile 
-          ? `PDF无法解析，已按图片文件名顺序自动分配 ${pdfEntries.length} 个 POS 编号`
-          : `已按图片文件名顺序自动分配 ${pdfEntries.length} 个 POS 编号`;
+          ? `PDF text layer unavailable. Auto-assigned ${pdfEntries.length} POS numbers from filenames.`
+          : `Auto-assigned ${pdfEntries.length} POS numbers from image filenames.`;
         
         toast.info(message, { duration: 5000 });
       }
@@ -214,7 +214,7 @@ const Index = () => {
 
   const handleExportPDF = async () => {
     if (items.length === 0) {
-      toast.error('没有可导出的项目');
+      toast.error('No items to export');
       return;
     }
 
@@ -222,14 +222,14 @@ const Index = () => {
     
     try {
       await exportToPDF(items, (progress: PdfExportProgress) => {
-        setProcessingMessage(progress.message);
+        setProcessingMessage(`Exporting ${progress.current}/${progress.total}...`);
         setProcessingProgress(Math.round((progress.current / progress.total) * 100));
       });
       
-      toast.success(`PDF 导出完成！共 ${items.length} 个项目`);
+      toast.success(`PDF export complete! ${items.length} items exported.`);
     } catch (error) {
       console.error('[PDF Export] Error:', error);
-      toast.error(`PDF 导出失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`PDF export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsProcessing(false);
       setProcessingProgress(undefined);

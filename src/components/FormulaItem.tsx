@@ -52,6 +52,13 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
               <ImageOff className="w-8 h-8 text-destructive/60" />
               <span className="text-xs text-destructive uppercase tracking-wider">Missing</span>
             </div>
+          ) : item.imageUrl === '/placeholder.svg' ? (
+            <div className="w-32 h-24 formula-image flex flex-col items-center justify-center gap-2 bg-accent/20 border-accent/40">
+              <Sparkles className="w-8 h-8 text-accent" />
+              <span className="text-xs text-accent uppercase tracking-wider text-center px-1">
+                WMF/EMF<br/>Ready for AI
+              </span>
+            </div>
           ) : (
             <img
               src={item.imageUrl}
