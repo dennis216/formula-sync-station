@@ -41,28 +41,43 @@ export function useFormulaItems() {
   );
 
   /**
-   * Apply salvaged images from ZIP to matching items.
+   * Apply salvaged images from Patch ZIP to matching items.
    * Matches by extracting the number from the original imageName (e.g., image70.wmf -> 70)
    * and comparing it to the salvaged image's imageNumber.
    */
   const applySalvagedImages = useCallback(
     (salvagedImages: SalvagedZipImage[]) => {
-      setItems((prev) => {
-        // Build a map: imageNumber -> SalvagedZipImage
-        const salvagedMap = new Map<number, SalvagedZipImage>();
-        salvagedImages.forEach((img) => salvagedMap.set(img.imageNumber, img));
+      console.log(`[Stitcher] Applying ${salvagedImages.length} salvaged images...`);
+      
+      // Build a map: imageNumber -> SalvagedZipImage
+      const salvagedMap = new Map<number, SalvagedZipImage>();
+      salvagedImages.forEach((img) => {
+        salvagedMap.set(img.imageNumber, img);
+        console.log(`[Stitcher] Salvage map: ${img.imageNumber} -> ${img.filename}`);
+      });
 
-        return prev.map((item) => {
+      setItems((prev) => {
+        let matchCount = 0;
+        
+        const updated = prev.map((item) => {
           // Extract the number from the original image filename (e.g., image70.wmf -> 70)
           const originalName = item.imageName || item.imageRef || '';
           const numberMatch = originalName.match(/(\d+)/);
           
-          if (!numberMatch) return item;
+          if (!numberMatch) {
+            console.log(`[Stitcher] No number in: ${originalName}`);
+            return item;
+          }
           
           const imageNumber = parseInt(numberMatch[1], 10);
           const salvaged = salvagedMap.get(imageNumber);
           
           if (salvaged) {
+            matchCount++;
+            console.log(`[Stitcher] ✅ MATCH: ${originalName} (${imageNumber}) -> ${salvaged.filename}`);
+            console.log(`[Stitcher]    URL: ${salvaged.url}`);
+            console.log(`[Stitcher]    Blob size: ${salvaged.blob.size} bytes`);
+            
             return {
               ...item,
               salvagedImageUrl: salvaged.url,
@@ -70,9 +85,14 @@ export function useFormulaItems() {
               status: 'restored' as const,
               aiError: null, // Clear previous errors since we have a good image now
             };
+          } else {
+            console.log(`[Stitcher] ❌ No match for: ${originalName} (${imageNumber})`);
           }
           return item;
         });
+        
+        console.log(`[Stitcher] Total matches: ${matchCount}/${prev.length}`);
+        return updated;
       });
     },
     []
