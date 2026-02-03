@@ -4,6 +4,7 @@ export interface FormulaItem {
   imageRef: string;
   imageName: string | null;
   imageUrl: string | null;
+  imageBlob: Blob | null; // Original blob for WMF/EMF files
   status: 'pending' | 'verified' | 'needs-modification' | 'missing';
   latex: string | null;
   isProcessing: boolean;

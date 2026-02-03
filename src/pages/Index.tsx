@@ -149,7 +149,14 @@ const Index = () => {
 
   const handleAiRecognize = async (id: string) => {
     const item = items.find((i) => i.id === id);
-    if (!item || !item.imageUrl) {
+    if (!item) {
+      toast.error('Item not found');
+      return;
+    }
+
+    // Check if we have image data (either URL or blob)
+    const hasImage = item.imageUrl || item.imageBlob;
+    if (!hasImage) {
       toast.error('Cannot process missing image');
       return;
     }
@@ -157,15 +164,27 @@ const Index = () => {
     setItemProcessing(id, true);
 
     try {
-      // Convert blob URL to base64
-      const response = await fetch(item.imageUrl);
-      const blob = await response.blob();
+      let blob: Blob;
+
+      // For WMF/EMF files (placeholder URL), use the stored blob
+      if (item.imageUrl === '/placeholder.svg' && item.imageBlob) {
+        blob = item.imageBlob;
+        console.log(`[AI] Using original blob for WMF/EMF file: ${item.imageName}`);
+      } else if (item.imageUrl) {
+        // For regular images, fetch from blob URL
+        const response = await fetch(item.imageUrl);
+        blob = await response.blob();
+      } else {
+        toast.error('No image data available');
+        setItemProcessing(id, false);
+        return;
+      }
+
+      // Convert blob to base64
       const reader = new FileReader();
-      
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onloadend = () => {
-          resolve(reader.result as string);
-        };
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
       
