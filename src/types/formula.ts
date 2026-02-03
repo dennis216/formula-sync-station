@@ -5,7 +5,10 @@ export interface FormulaItem {
   imageName: string | null;
   imageUrl: string | null;
   imageBlob: Blob | null; // Original blob for WMF/EMF files
-  status: 'pending' | 'verified' | 'needs-modification' | 'missing';
+  // Salvaged image data from PDF
+  salvagedImageUrl: string | null;
+  salvagedImageBlob: Blob | null;
+  status: 'pending' | 'verified' | 'needs-modification' | 'missing' | 'restored';
   latex: string | null;
   aiError: string | null; // Structured AI/format errors (e.g. WMF unsupported)
   isProcessing: boolean;
@@ -22,4 +25,11 @@ export interface ZipImageEntry {
   blob: Blob;
   url: string;
   isPlaceholder: boolean; // true if WMF/EMF (can't preview but blob is preserved)
+}
+
+export interface SalvagedPDFImage {
+  posNumber: number;
+  blob: Blob;
+  url: string;
+  pageNumber: number;
 }

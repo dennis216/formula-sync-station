@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, AlertTriangle, HelpCircle, XCircle } from 'lucide-react';
+import { CheckCircle, AlertTriangle, HelpCircle, XCircle, RefreshCcw } from 'lucide-react';
 import type { FormulaItem } from '@/types/formula';
 
 interface StatusBadgeProps {
@@ -8,7 +8,7 @@ interface StatusBadgeProps {
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, onClick }) => {
-  const config = {
+  const config: Record<FormulaItem['status'], { label: string; className: string; icon: React.ElementType }> = {
     pending: {
       label: 'Pending',
       className: 'status-pending',
@@ -28,6 +28,11 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, onClick }) => 
       label: 'Missing',
       className: 'status-missing',
       icon: XCircle,
+    },
+    restored: {
+      label: 'Restored from PDF',
+      className: 'status-restored',
+      icon: RefreshCcw,
     },
   };
 

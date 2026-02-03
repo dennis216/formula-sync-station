@@ -1,6 +1,12 @@
 import { jsPDF } from 'jspdf';
 import type { FormulaItem } from '@/types/formula';
 
+// Extend FormulaItem type for export to include salvaged fields
+interface ExportableFormulaItem extends FormulaItem {
+  salvagedImageUrl: string | null;
+  salvagedImageBlob: Blob | null;
+}
+
 export interface PdfExportProgress {
   current: number;
   total: number;
@@ -126,9 +132,12 @@ export async function exportToPDF(
     
     let imageData: { data: string; width: number; height: number } | null = null;
     
-    // Load image if available
-    if (item.imageUrl) {
-      imageData = await loadImageAsBase64(item.imageUrl);
+    // Prioritize salvaged image over original
+    const imageUrlToUse = item.salvagedImageUrl || item.imageUrl;
+    
+    // Load image if available (prioritize salvaged images)
+    if (imageUrlToUse && imageUrlToUse !== '/placeholder.svg') {
+      imageData = await loadImageAsBase64(imageUrlToUse);
       
       if (imageData) {
         // Calculate scaled dimensions to fit content width
@@ -189,12 +198,12 @@ export async function exportToPDF(
         pdf.setTextColor(0, 0, 0);
         currentY += 15;
       }
-    } else if (item.imageUrl === '/placeholder.svg') {
-      // WMF/EMF format - cannot be displayed in PDF
+    } else if (item.imageUrl === '/placeholder.svg' && !item.salvagedImageUrl) {
+      // WMF/EMF format without salvaged replacement - cannot be displayed in PDF
       pdf.setFontSize(9);
       pdf.setFont('helvetica', 'italic');
       pdf.setTextColor(180, 100, 50);
-      pdf.text('[WMF/EMF Format - Cannot display directly]', marginLeft, currentY + 5);
+      pdf.text('[WMF/EMF Format - No salvaged image available]', marginLeft, currentY + 5);
       
       // If LaTeX is available, show it instead
       if (item.latex && !item.latex.startsWith('ERROR:')) {
@@ -205,7 +214,7 @@ export async function exportToPDF(
         pdf.text(`LaTeX: ${latexPreview}`, marginLeft, currentY + 12);
         currentY += 20;
       } else {
-        pdf.text('[Use AI Recognition to get LaTeX]', marginLeft + 100, currentY + 5);
+        pdf.text('[Upload salvaged PDF to restore]', marginLeft + 100, currentY + 5);
         currentY += 15;
       }
       pdf.setTextColor(0, 0, 0);
@@ -258,6 +267,8 @@ function getStatusColor(status: string): { r: number; g: number; b: number } {
       return { r: 200, g: 100, b: 0 }; // Orange
     case 'missing':
       return { r: 180, g: 50, b: 50 }; // Red
+    case 'restored':
+      return { r: 0, g: 180, b: 180 }; // Cyan for restored
     default:
       return { r: 100, g: 100, b: 100 }; // Gray
   }
