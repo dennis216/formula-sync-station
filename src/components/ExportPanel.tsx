@@ -96,7 +96,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
             className="action-button-cyan h-8"
           >
             <FileImage className="w-3 h-3 mr-2" />
-            导出 PDF (全量)
+            Export Full PDF
           </Button>
 
           {/* Other Exports */}
@@ -104,7 +104,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8">
                 <Download className="w-3 h-3 mr-2" />
-                更多格式
+                More Formats
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
