@@ -83,29 +83,56 @@ const Index = () => {
       setProcessingProgress(50);
       
       let pdfEntries: { posNumber: number; imageRef: string }[] = [];
+      let usedFallback = false;
+      
       try {
         pdfEntries = await parsePDFSimple(pdfFile);
       } catch (pdfError) {
         const errorMsg = pdfError instanceof Error ? pdfError.message : 'Unknown PDF error';
         console.error('[PDF] Parse failed:', pdfError);
-        toast.error(`PDF parsing failed: ${errorMsg}`);
-        setIsProcessing(false);
-        return;
+        toast.warning(`PDF parsing failed: ${errorMsg}. Using image order as fallback.`);
       }
 
+      // Fallback: if no PDF entries, generate positions from ZIP images
       if (pdfEntries.length === 0) {
-        toast.error(
-          'No "Pos #" entries found in PDF. The PDF may lack a text layer (scanned document) or use a different format.',
-          { duration: 6000 }
+        console.log('[Fallback] No PDF entries found, generating positions from ZIP images...');
+        
+        // Sort images by filename (numerical order)
+        const sortedImages = [...images].sort((a, b) => {
+          // Extract numbers from filenames for natural sorting
+          const numA = parseInt(a.filename.match(/(\d+)/)?.[1] || '0', 10);
+          const numB = parseInt(b.filename.match(/(\d+)/)?.[1] || '0', 10);
+          if (numA !== numB) return numA - numB;
+          // Fallback to alphabetical if no numbers
+          return a.filename.localeCompare(b.filename);
+        });
+        
+        pdfEntries = sortedImages.map((img, index) => ({
+          posNumber: index + 1,
+          imageRef: img.filename.replace(/\.[^.]+$/, ''), // Remove extension
+        }));
+        
+        usedFallback = true;
+        toast.info(
+          `PDF无法解析，已按图片文件名顺序自动分配 ${pdfEntries.length} 个 POS 编号`,
+          { duration: 5000 }
         );
-        setIsProcessing(false);
-        return;
       }
 
-      // Build items
       setProcessingMessage('Matching images to positions...');
       setProcessingProgress(80);
-      buildItems(pdfEntries, images);
+
+      // Build items - pass sorted images if using fallback
+      const sortedImagesForBuild = usedFallback 
+        ? [...images].sort((a, b) => {
+            const numA = parseInt(a.filename.match(/(\d+)/)?.[1] || '0', 10);
+            const numB = parseInt(b.filename.match(/(\d+)/)?.[1] || '0', 10);
+            if (numA !== numB) return numA - numB;
+            return a.filename.localeCompare(b.filename);
+          })
+        : images;
+      
+      buildItems(pdfEntries, sortedImagesForBuild, usedFallback);
 
       setProcessingProgress(100);
       setHasProcessed(true);

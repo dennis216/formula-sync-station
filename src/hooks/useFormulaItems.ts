@@ -7,9 +7,17 @@ export function useFormulaItems() {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
 
   const buildItems = useCallback(
-    (pdfEntries: ParsedPDFEntry[], zipImages: ZipImageEntry[]) => {
-      const newItems: FormulaItem[] = pdfEntries.map((entry) => {
-        const matchedImage = matchImageToRef(entry.imageRef, zipImages);
+    (pdfEntries: ParsedPDFEntry[], zipImages: ZipImageEntry[], useFallbackMapping = false) => {
+      const newItems: FormulaItem[] = pdfEntries.map((entry, index) => {
+        let matchedImage: ZipImageEntry | null = null;
+        
+        if (useFallbackMapping) {
+          // In fallback mode, images are already sorted and matched by index
+          matchedImage = zipImages[index] || null;
+        } else {
+          // Normal mode: match by image reference pattern
+          matchedImage = matchImageToRef(entry.imageRef, zipImages);
+        }
 
         return {
           id: `pos-${entry.posNumber}`,
