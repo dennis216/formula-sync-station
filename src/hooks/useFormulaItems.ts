@@ -42,57 +42,76 @@ export function useFormulaItems() {
 
   /**
    * Apply salvaged images from Patch ZIP to matching items.
-   * Matches by extracting the number from the original imageName (e.g., image70.wmf -> 70)
-   * and comparing it to the salvaged image's imageNumber.
+   * STRICT MATCHING: Extracts number from imageRef (e.g., "image70" -> 70)
+   * and matches to salvaged image's imageNumber.
    */
   const applySalvagedImages = useCallback(
     (salvagedImages: SalvagedZipImage[]) => {
-      console.log(`[Stitcher] Applying ${salvagedImages.length} salvaged images...`);
+      console.log(`[Stitcher] ========================================`);
+      console.log(`[Stitcher] Starting stitch with ${salvagedImages.length} salvaged images`);
       
-      // Build a map: imageNumber -> SalvagedZipImage
+      // Build a map: imageNumber -> SalvagedZipImage for O(1) lookup
       const salvagedMap = new Map<number, SalvagedZipImage>();
       salvagedImages.forEach((img) => {
         salvagedMap.set(img.imageNumber, img);
-        console.log(`[Stitcher] Salvage map: ${img.imageNumber} -> ${img.filename}`);
+        console.log(`[Stitcher] Indexed: #${img.imageNumber} -> ${img.filename} (${img.blob.size} bytes, ${img.blob.type})`);
       });
 
-      setItems((prev) => {
+      setItems((prevItems) => {
+        console.log(`[Stitcher] Processing ${prevItems.length} items...`);
         let matchCount = 0;
+        let noNumberCount = 0;
+        let noMatchCount = 0;
         
-        const updated = prev.map((item) => {
-          // Extract the number from the original image filename (e.g., image70.wmf -> 70)
-          const originalName = item.imageName || item.imageRef || '';
-          const numberMatch = originalName.match(/(\d+)/);
+        const updatedItems = prevItems.map((item) => {
+          // STRICT: Extract number from imageRef (e.g., "image70" -> 70)
+          // imageRef is the base name without extension from the ZIP
+          const refSource = item.imageRef || item.imageName || '';
+          const numberMatch = refSource.match(/(\d+)/);
           
           if (!numberMatch) {
-            console.log(`[Stitcher] No number in: ${originalName}`);
+            noNumberCount++;
+            console.log(`[Stitcher] ⚠️ No number found in: "${refSource}" (POS #${item.posNumber})`);
             return item;
           }
           
-          const imageNumber = parseInt(numberMatch[1], 10);
-          const salvaged = salvagedMap.get(imageNumber);
+          const extractedNumber = parseInt(numberMatch[1], 10);
+          const salvaged = salvagedMap.get(extractedNumber);
           
           if (salvaged) {
             matchCount++;
-            console.log(`[Stitcher] ✅ MATCH: ${originalName} (${imageNumber}) -> ${salvaged.filename}`);
-            console.log(`[Stitcher]    URL: ${salvaged.url}`);
-            console.log(`[Stitcher]    Blob size: ${salvaged.blob.size} bytes`);
+            console.log(`[Stitcher] ✅ MATCH POS #${item.posNumber}: "${refSource}" (#${extractedNumber}) -> ${salvaged.filename}`);
+            console.log(`[Stitcher]    New URL: ${salvaged.url}`);
+            console.log(`[Stitcher]    Blob: ${salvaged.blob.size} bytes, type=${salvaged.blob.type}`);
             
+            // CRITICAL: Update BOTH salvaged fields AND clear errors
+            // The FormulaItem component and AI recognition will use these
             return {
               ...item,
+              // Store the patched image data
               salvagedImageUrl: salvaged.url,
               salvagedImageBlob: salvaged.blob,
+              // Update status to restored
               status: 'restored' as const,
-              aiError: null, // Clear previous errors since we have a good image now
+              // Clear any previous AI errors since we now have a good image
+              aiError: null,
             };
           } else {
-            console.log(`[Stitcher] ❌ No match for: ${originalName} (${imageNumber})`);
+            noMatchCount++;
+            console.log(`[Stitcher] ❌ No patch for POS #${item.posNumber}: "${refSource}" (#${extractedNumber})`);
           }
+          
           return item;
         });
         
-        console.log(`[Stitcher] Total matches: ${matchCount}/${prev.length}`);
-        return updated;
+        console.log(`[Stitcher] ========================================`);
+        console.log(`[Stitcher] STITCH COMPLETE:`);
+        console.log(`[Stitcher]   ✅ Matched: ${matchCount}`);
+        console.log(`[Stitcher]   ❌ No patch found: ${noMatchCount}`);
+        console.log(`[Stitcher]   ⚠️ No number in ref: ${noNumberCount}`);
+        console.log(`[Stitcher] ========================================`);
+        
+        return updatedItems;
       });
     },
     []
