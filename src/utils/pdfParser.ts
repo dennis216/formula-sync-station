@@ -76,12 +76,19 @@ export async function parsePDF(file: File): Promise<ParsedPDFEntry[]> {
   }
 }
 
-// Alternative: Simple sequential extraction
+// Alternative: Simple sequential extraction - NEVER throws, always returns array
 export async function parsePDFSimple(file: File): Promise<ParsedPDFEntry[]> {
   try {
     const pdfjs = await getPdfJs();
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    
+    let pdf;
+    try {
+      pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    } catch (loadError) {
+      console.warn('[PDF Parser Simple] Failed to load PDF document:', loadError);
+      return []; // Return empty, don't throw
+    }
     
     let fullText = '';
     let hasTextContent = false;
@@ -107,7 +114,8 @@ export async function parsePDFSimple(file: File): Promise<ParsedPDFEntry[]> {
     }
 
     if (!hasTextContent) {
-      console.warn('[PDF Parser Simple] PDF appears to have no extractable text layer');
+      console.warn('[PDF Parser Simple] PDF appears to have no extractable text layer - returning empty array');
+      return []; // Return empty, fallback will handle it
     }
 
     const entries: ParsedPDFEntry[] = [];
@@ -137,7 +145,8 @@ export async function parsePDFSimple(file: File): Promise<ParsedPDFEntry[]> {
     
     return entries;
   } catch (error) {
-    console.error('[PDF Parser Simple] Failed to parse PDF:', error);
-    return []; // Return empty array instead of throwing
+    // Catch-all: NEVER throw, always return empty array
+    console.error('[PDF Parser Simple] Unexpected error:', error);
+    return [];
   }
 }

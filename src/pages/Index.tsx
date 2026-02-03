@@ -44,8 +44,8 @@ const Index = () => {
   );
 
   const handleProcess = async () => {
-    if (!zipFile || !pdfFile) {
-      toast.error('Please upload both ZIP and PDF files');
+    if (!zipFile) {
+      toast.error('Please upload a ZIP file');
       return;
     }
 
@@ -56,7 +56,7 @@ const Index = () => {
       // Clean up previous URLs
       cleanupImageUrls(zipImages.map((img) => img.url));
 
-      // Parse ZIP
+      // Step 1: Parse ZIP (primary data source)
       setProcessingMessage('Extracting images from archive...');
       setProcessingProgress(20);
       
@@ -78,61 +78,47 @@ const Index = () => {
         return;
       }
 
-      // Parse PDF
-      setProcessingMessage('Parsing PDF index...');
-      setProcessingProgress(50);
-      
+      console.log(`[Process] Found ${images.length} images in ZIP`);
+
+      // Step 2: Try to parse PDF (optional - for matching)
       let pdfEntries: { posNumber: number; imageRef: string }[] = [];
       let usedFallback = false;
       
-      try {
-        pdfEntries = await parsePDFSimple(pdfFile);
-      } catch (pdfError) {
-        const errorMsg = pdfError instanceof Error ? pdfError.message : 'Unknown PDF error';
-        console.error('[PDF] Parse failed:', pdfError);
-        toast.warning(`PDF parsing failed: ${errorMsg}. Using image order as fallback.`);
+      if (pdfFile) {
+        setProcessingMessage('Parsing PDF index...');
+        setProcessingProgress(50);
+        
+        try {
+          pdfEntries = await parsePDFSimple(pdfFile);
+          console.log(`[Process] PDF parsed: ${pdfEntries.length} entries`);
+        } catch (pdfError) {
+          console.warn('[PDF] Parse failed, will use filename fallback:', pdfError);
+        }
       }
 
-      // Fallback: if no PDF entries, generate positions from ZIP images
+      // Step 3: Fallback - if no PDF entries, generate from ZIP filenames
       if (pdfEntries.length === 0) {
-        console.log('[Fallback] No PDF entries found, generating positions from ZIP images...');
+        console.log('[Fallback] Using filename-based POS assignment');
+        usedFallback = true;
         
-        // Sort images by filename (numerical order)
-        const sortedImages = [...images].sort((a, b) => {
-          // Extract numbers from filenames for natural sorting
-          const numA = parseInt(a.filename.match(/(\d+)/)?.[1] || '0', 10);
-          const numB = parseInt(b.filename.match(/(\d+)/)?.[1] || '0', 10);
-          if (numA !== numB) return numA - numB;
-          // Fallback to alphabetical if no numbers
-          return a.filename.localeCompare(b.filename);
-        });
-        
-        pdfEntries = sortedImages.map((img, index) => ({
+        // Images are already natural-sorted by parseZip
+        pdfEntries = images.map((img, index) => ({
           posNumber: index + 1,
           imageRef: img.filename.replace(/\.[^.]+$/, ''), // Remove extension
         }));
         
-        usedFallback = true;
-        toast.info(
-          `PDF无法解析，已按图片文件名顺序自动分配 ${pdfEntries.length} 个 POS 编号`,
-          { duration: 5000 }
-        );
+        const message = pdfFile 
+          ? `PDF无法解析，已按图片文件名顺序自动分配 ${pdfEntries.length} 个 POS 编号`
+          : `已按图片文件名顺序自动分配 ${pdfEntries.length} 个 POS 编号`;
+        
+        toast.info(message, { duration: 5000 });
       }
 
-      setProcessingMessage('Matching images to positions...');
+      // Step 4: Build items
+      setProcessingMessage('Building formula list...');
       setProcessingProgress(80);
 
-      // Build items - pass sorted images if using fallback
-      const sortedImagesForBuild = usedFallback 
-        ? [...images].sort((a, b) => {
-            const numA = parseInt(a.filename.match(/(\d+)/)?.[1] || '0', 10);
-            const numB = parseInt(b.filename.match(/(\d+)/)?.[1] || '0', 10);
-            if (numA !== numB) return numA - numB;
-            return a.filename.localeCompare(b.filename);
-          })
-        : images;
-      
-      buildItems(pdfEntries, sortedImagesForBuild, usedFallback);
+      buildItems(pdfEntries, images, usedFallback);
 
       setProcessingProgress(100);
       setHasProcessed(true);
@@ -243,7 +229,7 @@ const Index = () => {
           <div className="flex justify-center gap-4 mt-4">
             <Button
               onClick={handleProcess}
-              disabled={!zipFile || !pdfFile || isProcessing}
+              disabled={!zipFile || isProcessing}
               className="action-button-cyan px-8"
             >
               <Play className="w-4 h-4 mr-2" />

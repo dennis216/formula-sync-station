@@ -2,9 +2,32 @@ import JSZip from 'jszip';
 import type { ZipImageEntry } from '@/types/formula';
 
 // Supported image formats (browser-compatible)
-const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
 // Legacy formats that we skip with a warning
-const SKIPPED_EXTENSIONS = ['.wmf', '.emf', '.tiff'];
+const SKIPPED_EXTENSIONS = ['.wmf', '.emf', '.tiff', '.wdp', '.pcz'];
+
+// Natural sort comparator for filenames (image1 < image2 < image10)
+function naturalSort(a: string, b: string): number {
+  const regex = /(\d+)|(\D+)/g;
+  const aParts = a.match(regex) || [];
+  const bParts = b.match(regex) || [];
+  
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aPart = aParts[i] || '';
+    const bPart = bParts[i] || '';
+    
+    const aNum = parseInt(aPart, 10);
+    const bNum = parseInt(bPart, 10);
+    
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      if (aNum !== bNum) return aNum - bNum;
+    } else {
+      const cmp = aPart.localeCompare(bPart);
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
+}
 
 export async function parseZip(file: File): Promise<ZipImageEntry[]> {
   try {
@@ -15,6 +38,14 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
     const skippedFiles: string[] = [];
     
     console.log(`[ZIP Parser] Processing archive: ${file.name}`);
+    console.log(`[ZIP Parser] Total files in archive: ${Object.keys(contents.files).length}`);
+    
+    // Log all paths to help debug
+    const allPaths = Object.keys(contents.files);
+    console.log('[ZIP Parser] All paths:', allPaths.slice(0, 20), allPaths.length > 20 ? `... and ${allPaths.length - 20} more` : '');
+    
+    // Priority folders to search (Word document structure)
+    const priorityFolders = ['word/media/', 'media/', 'images/', ''];
     
     const filePromises = Object.entries(contents.files).map(async ([path, zipEntry]) => {
       if (zipEntry.dir) return null;
@@ -39,10 +70,11 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
         const blob = await zipEntry.async('blob');
         const url = URL.createObjectURL(blob);
         
-        console.log(`[ZIP Parser] Extracted: ${filename}`);
+        console.log(`[ZIP Parser] Extracted: ${path}`);
         
         return {
           filename,
+          path, // Keep full path for debugging
           blob,
           url,
         };
@@ -64,7 +96,10 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
       console.warn(`[ZIP Parser] Skipped ${skippedFiles.length} unsupported files: ${skippedFiles.join(', ')}`);
     }
     
-    console.log(`[ZIP Parser] Successfully extracted ${entries.length} images`);
+    // Sort entries using natural sort
+    entries.sort((a, b) => naturalSort(a.filename, b.filename));
+    
+    console.log(`[ZIP Parser] Successfully extracted ${entries.length} images (sorted by natural order)`);
     
     return entries;
   } catch (error) {
