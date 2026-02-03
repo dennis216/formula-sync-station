@@ -198,27 +198,44 @@ const Index = () => {
       });
 
       if (error) {
-        throw new Error(error.message || 'AI recognition failed');
+        console.error('[AI] Supabase invoke error:', error);
+        toast.error(`AI recognition failed: ${error.message || 'Network error'}`);
+        return;
       }
 
+      // Handle UNSUPPORTED_FORMAT error (WMF/EMF files)
+      if (data?.error === 'UNSUPPORTED_FORMAT') {
+        const msg = data.message || `${data.format || 'File'} format requires conversion to PNG`;
+        updateItemAiError(id, msg);
+        updateItemStatus(id, 'needs-modification');
+        toast.warning(`POS #${item.posNumber}: ${msg}`);
+        return;
+      }
+
+      // Handle other structured errors
       if (data?.error) {
         const errText = String(data.error);
+        // Legacy format check for backwards compatibility
         const unsupportedMatch = errText.match(/\[UNSUPPORTED_FORMAT:\s*([A-Z0-9+_-]+)\]/i);
         if (unsupportedMatch) {
           const fmt = unsupportedMatch[1].toUpperCase();
           const msg = `${fmt} format requires manual conversion or OCR`;
           updateItemAiError(id, msg);
           updateItemStatus(id, 'needs-modification');
-          toast.info(`POS #${item.posNumber}: ${msg}`);
+          toast.warning(`POS #${item.posNumber}: ${msg}`);
           return;
         }
 
-        throw new Error(errText);
+        // Generic AI error
+        toast.error(`POS #${item.posNumber}: ${errText}`);
+        updateItemAiError(id, errText);
+        return;
       }
 
       const latex = String(data?.latex ?? '');
       if (!latex) {
-        throw new Error('No LaTeX returned');
+        toast.error(`POS #${item.posNumber}: No LaTeX returned`);
+        return;
       }
       
       if (latex.startsWith('ERROR:')) {
