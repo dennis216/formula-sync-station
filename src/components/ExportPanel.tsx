@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, FileJson, FileText, Filter, FileImage } from 'lucide-react';
+import { Download, FileJson, FileText, Filter, FileImage, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,8 +14,10 @@ interface ExportPanelProps {
   onExportJSON: () => void;
   onExportTXT: () => void;
   onExportPDF: () => void;
+  onExportStudyGuide: () => void;
   filterStatus: string | null;
   onFilterChange: (status: string | null) => void;
+  hasDocumentStructure: boolean;
 }
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({
@@ -23,13 +25,16 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
   onExportJSON,
   onExportTXT,
   onExportPDF,
+  onExportStudyGuide,
   filterStatus,
   onFilterChange,
+  hasDocumentStructure,
 }) => {
   const stats = {
     total: items.length,
     verified: items.filter(i => i.status === 'verified').length,
     pending: items.filter(i => i.status === 'pending').length,
+    restored: items.filter(i => i.status === 'restored').length,
     needsModification: items.filter(i => i.status === 'needs-modification').length,
     missing: items.filter(i => i.status === 'missing').length,
   };
@@ -44,16 +49,16 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
             <span className="text-foreground font-bold">{stats.total}</span>
           </div>
           <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Restored:</span>
+            <span className="text-primary font-bold">{stats.restored}</span>
+          </div>
+          <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Verified:</span>
             <span className="text-success font-bold">{stats.verified}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Pending:</span>
             <span className="text-warning font-bold">{stats.pending}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Needs Fix:</span>
-            <span className="text-warning font-bold">{stats.needsModification}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Missing:</span>
@@ -75,6 +80,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
               <DropdownMenuItem onClick={() => onFilterChange(null)}>
                 All Items
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onFilterChange('restored')}>
+                Restored
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onFilterChange('pending')}>
                 Pending
               </DropdownMenuItem>
@@ -90,13 +98,15 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* PDF Export - Premium Button */}
+          {/* STUDY GUIDE - Primary Action */}
           <Button 
-            onClick={onExportPDF} 
-            className="action-button-cyan h-8"
+            onClick={onExportStudyGuide} 
+            className="action-button-cyan h-9 px-4 font-semibold"
+            disabled={!hasDocumentStructure}
+            title={hasDocumentStructure ? 'Generate full repaired document with text + formulas' : 'Upload a DOCX ZIP to enable'}
           >
-            <FileImage className="w-3 h-3 mr-2" />
-            导出 PDF (全量)
+            <BookOpen className="w-4 h-4 mr-2" />
+            GENERATE FULL REPAIRED STUDY GUIDE
           </Button>
 
           {/* Other Exports */}
@@ -104,10 +114,14 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8">
                 <Download className="w-3 h-3 mr-2" />
-                更多格式
+                Other Formats
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onExportPDF}>
+                <FileImage className="w-4 h-4 mr-2" />
+                Export Images Only (PDF)
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={onExportJSON}>
                 <FileJson className="w-4 h-4 mr-2" />
                 Export as JSON
