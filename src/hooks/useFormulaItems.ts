@@ -28,6 +28,7 @@ export function useFormulaItems() {
           imageBlob: matchedImage?.blob || null, // Store the original blob
           status: matchedImage ? 'pending' : 'missing',
           latex: null,
+          aiError: null,
           isProcessing: false,
         };
       });
@@ -48,7 +49,13 @@ export function useFormulaItems() {
 
   const updateItemLatex = useCallback((id: string, latex: string) => {
     setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, latex } : item))
+      prev.map((item) => (item.id === id ? { ...item, latex, aiError: null } : item))
+    );
+  }, []);
+
+  const updateItemAiError = useCallback((id: string, aiError: string | null) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, aiError } : item))
     );
   }, []);
 
@@ -76,6 +83,7 @@ export function useFormulaItems() {
     buildItems,
     updateItemStatus,
     updateItemLatex,
+    updateItemAiError,
     setItemProcessing,
     clearItems,
   };

@@ -32,6 +32,7 @@ const Index = () => {
     buildItems,
     updateItemStatus,
     updateItemLatex,
+    updateItemAiError,
     setItemProcessing,
     clearItems,
   } = useFormulaItems();
@@ -162,6 +163,7 @@ const Index = () => {
     }
 
     setItemProcessing(id, true);
+    updateItemAiError(id, null);
 
     try {
       let blob: Blob;
@@ -199,11 +201,25 @@ const Index = () => {
         throw new Error(error.message || 'AI recognition failed');
       }
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (data?.error) {
+        const errText = String(data.error);
+        const unsupportedMatch = errText.match(/\[UNSUPPORTED_FORMAT:\s*([A-Z0-9+_-]+)\]/i);
+        if (unsupportedMatch) {
+          const fmt = unsupportedMatch[1].toUpperCase();
+          const msg = `${fmt} format requires manual conversion or OCR`;
+          updateItemAiError(id, msg);
+          updateItemStatus(id, 'needs-modification');
+          toast.info(`POS #${item.posNumber}: ${msg}`);
+          return;
+        }
+
+        throw new Error(errText);
       }
 
-      const latex = data.latex;
+      const latex = String(data?.latex ?? '');
+      if (!latex) {
+        throw new Error('No LaTeX returned');
+      }
       
       if (latex.startsWith('ERROR:')) {
         toast.error(`POS #${item.posNumber}: ${latex}`);
