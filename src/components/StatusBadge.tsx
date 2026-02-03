@@ -30,7 +30,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, onClick }) => 
       icon: XCircle,
     },
     restored: {
-      label: 'Restored from PDF',
+      label: 'Restored',
       className: 'status-restored',
       icon: RefreshCcw,
     },

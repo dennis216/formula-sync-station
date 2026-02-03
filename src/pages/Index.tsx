@@ -164,13 +164,19 @@ const Index = () => {
       return;
     }
 
-    // Prioritize salvaged image, then original
-    const imageUrl = item.salvagedImageUrl || item.imageUrl;
+    // PRIORITY: Use salvaged (patched) image first, then original
     const imageBlob = item.salvagedImageBlob || item.imageBlob;
+    const imageUrl = item.salvagedImageUrl || item.imageUrl;
     
-    const hasImage = imageUrl || imageBlob;
-    if (!hasImage) {
-      toast.error('Cannot process missing image');
+    console.log(`[AI] Processing POS #${item.posNumber}:`);
+    console.log(`[AI]   salvagedImageBlob: ${item.salvagedImageBlob ? `${item.salvagedImageBlob.size} bytes` : 'null'}`);
+    console.log(`[AI]   salvagedImageUrl: ${item.salvagedImageUrl || 'null'}`);
+    console.log(`[AI]   originalImageBlob: ${item.imageBlob ? `${item.imageBlob.size} bytes` : 'null'}`);
+    console.log(`[AI]   Using blob: ${imageBlob ? `${imageBlob.size} bytes, type=${imageBlob.type}` : 'null'}`);
+    
+    // Must have blob data to proceed
+    if (!imageBlob) {
+      toast.error('No image data available - cannot process');
       return;
     }
 
@@ -178,23 +184,9 @@ const Index = () => {
     updateItemAiError(id, null);
 
     try {
-      let blob: Blob;
-
-      // For WMF/EMF files without salvaged image, use the stored blob
-      if (imageUrl === '/placeholder.svg' && imageBlob) {
-        blob = imageBlob;
-        console.log(`[AI] Using original blob for WMF/EMF file: ${item.imageName}`);
-      } else if (imageUrl && imageUrl !== '/placeholder.svg') {
-        // For regular images or salvaged images, fetch from blob URL
-        const response = await fetch(imageUrl);
-        blob = await response.blob();
-      } else if (imageBlob) {
-        blob = imageBlob;
-      } else {
-        toast.error('No image data available');
-        setItemProcessing(id, false);
-        return;
-      }
+      // Use the blob directly (prioritizes salvaged PNG over original WMF)
+      const blob = imageBlob;
+      console.log(`[AI] Sending to Gemini: ${blob.size} bytes, type=${blob.type}`);
 
       // Convert blob to base64
       const reader = new FileReader();
@@ -205,6 +197,7 @@ const Index = () => {
       });
       
       const imageBase64 = await base64Promise;
+      console.log(`[AI] Base64 length: ${imageBase64.length} chars`);
 
       // Call the edge function
       const { data, error } = await supabase.functions.invoke('recognize-formula', {
