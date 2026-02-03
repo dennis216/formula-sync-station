@@ -133,8 +133,17 @@ function sniffRasterMime(base64: string): string | null {
   return null;
 }
 
-function unsupportedMessage(format: UnsupportedFormat) {
-  return `[UNSUPPORTED_FORMAT: ${format.toUpperCase()}]`;
+function getUnsupportedFormatResponse(format: UnsupportedFormat) {
+  const messages: Record<UnsupportedFormat, string> = {
+    wmf: "WMF files need conversion to PNG first.",
+    emf: "EMF files need conversion to PNG first.",
+    svg: "SVG files are not supported for AI recognition.",
+  };
+  return {
+    error: "UNSUPPORTED_FORMAT",
+    format: format.toUpperCase(),
+    message: messages[format],
+  };
 }
 
 serve(async (req) => {
@@ -159,7 +168,8 @@ serve(async (req) => {
     const { mime, base64 } = splitDataUrl(imageBase64);
     const unsupported = sniffUnsupportedFormat(mime, base64);
     if (unsupported) {
-      return jsonOk({ latex: null, error: unsupportedMessage(unsupported) });
+      console.log(`[recognize-formula] Unsupported format detected: ${unsupported}`);
+      return jsonOk({ latex: null, ...getUnsupportedFormatResponse(unsupported) });
     }
 
     const systemPrompt = `You are an expert at reading mathematical formulas from images and converting them to LaTeX code.
