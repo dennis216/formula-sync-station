@@ -121,6 +121,10 @@
     @apply bg-[hsl(var(--status-missing))] text-[hsl(var(--destructive-foreground))];
   }
 
+  .status-restored {
+    @apply bg-accent text-accent-foreground;
+  }
+
   .formula-image {
     @apply border border-border rounded-sm bg-muted/50;
   }

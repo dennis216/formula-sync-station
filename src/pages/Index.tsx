@@ -1,35 +1,38 @@
 import React, { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
-import { FileUploader } from '@/components/FileUploader';
+import { DualFileUploader } from '@/components/DualFileUploader';
 import { FormulaList } from '@/components/FormulaList';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ProcessingOverlay } from '@/components/ProcessingOverlay';
 import { useFormulaItems } from '@/hooks/useFormulaItems';
-import { parsePDFSimple } from '@/utils/pdfParser';
 import { parseZip, cleanupImageUrls } from '@/utils/zipParser';
+import { extractSalvagedImages, cleanupSalvagedUrls } from '@/utils/pdfImageExtractor';
 import { exportToJSON, exportToTXT, downloadFile } from '@/utils/exportUtils';
 import { exportToPDF, type PdfExportProgress } from '@/utils/pdfExport';
-import type { ZipImageEntry } from '@/types/formula';
+import type { ZipImageEntry, SalvagedPDFImage } from '@/types/formula';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [zipFile, setZipFile] = useState<File | null>(null);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [salvagePdfFile, setSalvagePdfFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [processingProgress, setProcessingProgress] = useState<number | undefined>();
   const [zipImages, setZipImages] = useState<ZipImageEntry[]>([]);
+  const [salvagedImages, setSalvagedImages] = useState<SalvagedPDFImage[]>([]);
   const [hasProcessed, setHasProcessed] = useState(false);
 
   const {
     items,
     filteredItems,
     filterStatus,
+    stats,
     setFilterStatus,
     buildItems,
+    applySalvagedImages,
     updateItemStatus,
     updateItemLatex,
     updateItemAiError,
@@ -40,14 +43,14 @@ const Index = () => {
   const handleFilesSelected = useCallback(
     (zip: File | null, pdf: File | null) => {
       setZipFile(zip);
-      setPdfFile(pdf);
+      setSalvagePdfFile(pdf);
     },
     []
   );
 
   const handleProcess = async () => {
     if (!zipFile) {
-      toast.error('Please upload a ZIP file');
+      toast.error('Please upload the original ZIP file');
       return;
     }
 
@@ -57,10 +60,11 @@ const Index = () => {
     try {
       // Clean up previous URLs
       cleanupImageUrls(zipImages);
+      cleanupSalvagedUrls(salvagedImages);
 
-      // Step 1: Parse ZIP (primary data source)
-      setProcessingMessage('Extracting images from archive...');
-      setProcessingProgress(20);
+      // Step 1: Parse ZIP (determines POS order and original images)
+      setProcessingMessage('Extracting original images from archive...');
+      setProcessingProgress(15);
       
       let images: ZipImageEntry[] = [];
       try {
@@ -82,51 +86,54 @@ const Index = () => {
 
       console.log(`[Process] Found ${images.length} images in ZIP`);
 
-      // Step 2: Try to parse PDF (optional - for matching)
-      let pdfEntries: { posNumber: number; imageRef: string }[] = [];
-      let usedFallback = false;
+      // Step 2: Build initial items from ZIP (POS order based on filenames)
+      setProcessingMessage('Building formula list from original document...');
+      setProcessingProgress(35);
       
-      if (pdfFile) {
-        setProcessingMessage('Parsing PDF index...');
-        setProcessingProgress(50);
+      // Generate POS entries from ZIP images (natural sorted order)
+      const pdfEntries = images.map((img, index) => ({
+        posNumber: index + 1,
+        imageRef: img.filename.replace(/\.[^.]+$/, ''),
+      }));
+      
+      buildItems(pdfEntries, images, true);
+      console.log(`[Process] Built ${pdfEntries.length} items from ZIP`);
+
+      // Step 3: If salvage PDF is provided, extract and match images
+      let extractedSalvaged: SalvagedPDFImage[] = [];
+      
+      if (salvagePdfFile) {
+        setProcessingMessage('Extracting salvaged images from PDF...');
+        setProcessingProgress(55);
         
         try {
-          pdfEntries = await parsePDFSimple(pdfFile);
-          console.log(`[Process] PDF parsed: ${pdfEntries.length} entries`);
+          extractedSalvaged = await extractSalvagedImages(salvagePdfFile);
+          setSalvagedImages(extractedSalvaged);
+          console.log(`[Process] Extracted ${extractedSalvaged.length} salvaged images from PDF`);
+          
+          if (extractedSalvaged.length > 0) {
+            setProcessingMessage('Matching and restoring images...');
+            setProcessingProgress(75);
+            applySalvagedImages(extractedSalvaged);
+            
+            toast.success(`${extractedSalvaged.length} Images Salvaged and matched!`);
+          } else {
+            toast.warning('No images with POS numbers found in PDF. Check format.');
+          }
         } catch (pdfError) {
-          console.warn('[PDF] Parse failed, will use filename fallback:', pdfError);
+          console.error('[PDF] Salvage extraction failed:', pdfError);
+          toast.warning('Could not extract images from salvage PDF');
         }
       }
-
-      // Step 3: Fallback - if no PDF entries, generate from ZIP filenames
-      if (pdfEntries.length === 0) {
-        console.log('[Fallback] Using filename-based POS assignment');
-        usedFallback = true;
-        
-        // Images are already natural-sorted by parseZip
-        pdfEntries = images.map((img, index) => ({
-          posNumber: index + 1,
-          imageRef: img.filename.replace(/\.[^.]+$/, ''), // Remove extension
-        }));
-        
-        const message = pdfFile 
-          ? `PDF text layer unavailable. Auto-assigned ${pdfEntries.length} POS numbers from filenames.`
-          : `Auto-assigned ${pdfEntries.length} POS numbers from image filenames.`;
-        
-        toast.info(message, { duration: 5000 });
-      }
-
-      // Step 4: Build items
-      setProcessingMessage('Building formula list...');
-      setProcessingProgress(80);
-
-      buildItems(pdfEntries, images, usedFallback);
 
       setProcessingProgress(100);
       setHasProcessed(true);
       
+      const restoredCount = extractedSalvaged.length;
+      const totalCount = pdfEntries.length;
+      
       toast.success(
-        `Loaded ${pdfEntries.length} positions with ${images.length} images`
+        `Loaded ${totalCount} positions • ${restoredCount} restored from PDF`
       );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -140,9 +147,11 @@ const Index = () => {
 
   const handleReset = () => {
     cleanupImageUrls(zipImages);
+    cleanupSalvagedUrls(salvagedImages);
     setZipFile(null);
-    setPdfFile(null);
+    setSalvagePdfFile(null);
     setZipImages([]);
+    setSalvagedImages([]);
     clearItems();
     setHasProcessed(false);
     toast.info('Workspace cleared');
@@ -155,8 +164,11 @@ const Index = () => {
       return;
     }
 
-    // Check if we have image data (either URL or blob)
-    const hasImage = item.imageUrl || item.imageBlob;
+    // Prioritize salvaged image, then original
+    const imageUrl = item.salvagedImageUrl || item.imageUrl;
+    const imageBlob = item.salvagedImageBlob || item.imageBlob;
+    
+    const hasImage = imageUrl || imageBlob;
     if (!hasImage) {
       toast.error('Cannot process missing image');
       return;
@@ -168,14 +180,16 @@ const Index = () => {
     try {
       let blob: Blob;
 
-      // For WMF/EMF files (placeholder URL), use the stored blob
-      if (item.imageUrl === '/placeholder.svg' && item.imageBlob) {
-        blob = item.imageBlob;
+      // For WMF/EMF files without salvaged image, use the stored blob
+      if (imageUrl === '/placeholder.svg' && imageBlob) {
+        blob = imageBlob;
         console.log(`[AI] Using original blob for WMF/EMF file: ${item.imageName}`);
-      } else if (item.imageUrl) {
-        // For regular images, fetch from blob URL
-        const response = await fetch(item.imageUrl);
+      } else if (imageUrl && imageUrl !== '/placeholder.svg') {
+        // For regular images or salvaged images, fetch from blob URL
+        const response = await fetch(imageUrl);
         blob = await response.blob();
+      } else if (imageBlob) {
+        blob = imageBlob;
       } else {
         toast.error('No image data available');
         setItemProcessing(id, false);
@@ -295,11 +309,13 @@ const Index = () => {
       <main className="container py-6 space-y-6">
         {/* Upload Section */}
         <section>
-          <FileUploader
+          <DualFileUploader
             zipFile={zipFile}
-            pdfFile={pdfFile}
+            salvagePdfFile={salvagePdfFile}
             onFilesSelected={handleFilesSelected}
             isProcessing={isProcessing}
+            zipImageCount={hasProcessed ? zipImages.length : undefined}
+            salvagedImageCount={hasProcessed ? stats.restored : undefined}
           />
 
           {/* Process Button */}
@@ -310,7 +326,7 @@ const Index = () => {
               className="action-button-cyan px-8"
             >
               <Play className="w-4 h-4 mr-2" />
-              Process Files
+              Stitch & Process
             </Button>
 
             {hasProcessed && (

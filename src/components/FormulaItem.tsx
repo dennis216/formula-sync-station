@@ -1,5 +1,5 @@
 import React, { useState, memo } from 'react';
-import { Sparkles, ImageOff, Loader2 } from 'lucide-react';
+import { Sparkles, ImageOff, Loader2, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from './StatusBadge';
 import { LaTeXPreview } from './LaTeXPreview';
@@ -21,11 +21,16 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
   const [showLatex, setShowLatex] = useState(!!item.latex);
 
   const cycleStatus = () => {
-    const statusOrder: FormulaItemType['status'][] = ['pending', 'verified', 'needs-modification'];
+    const statusOrder: FormulaItemType['status'][] = ['pending', 'verified', 'needs-modification', 'restored'];
     const currentIndex = statusOrder.indexOf(item.status);
     const nextIndex = (currentIndex + 1) % statusOrder.length;
     onStatusChange(item.id, statusOrder[nextIndex]);
   };
+
+  // Determine which image to display - prioritize salvaged image
+  const displayImageUrl = item.salvagedImageUrl || item.imageUrl;
+  const isRestored = !!item.salvagedImageUrl;
+  const isWmfPlaceholder = !item.salvagedImageUrl && item.imageUrl === '/placeholder.svg';
 
   return (
     <div className="industrial-panel p-4 animate-fade-in">
@@ -43,27 +48,33 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
               {item.imageName}
             </div>
           )}
+          {isRestored && (
+            <div className="flex items-center gap-1 mt-2 text-xs text-accent">
+              <RefreshCcw className="w-3 h-3" />
+              <span>Restored</span>
+            </div>
+          )}
         </div>
 
         {/* Image Display */}
         <div className="flex-shrink-0">
-          {item.status === 'missing' || !item.imageUrl ? (
+          {item.status === 'missing' || !displayImageUrl ? (
             <div className="w-32 h-24 formula-image flex flex-col items-center justify-center gap-2 bg-destructive/10 border-destructive/30">
               <ImageOff className="w-8 h-8 text-destructive/60" />
               <span className="text-xs text-destructive uppercase tracking-wider">Missing</span>
             </div>
-          ) : item.imageUrl === '/placeholder.svg' ? (
+          ) : isWmfPlaceholder ? (
             <div className="w-32 h-24 formula-image flex flex-col items-center justify-center gap-2 bg-accent/20 border-accent/40">
               <Sparkles className="w-8 h-8 text-accent" />
               <span className="text-xs text-accent uppercase tracking-wider text-center px-1">
-                WMF/EMF<br/>Ready for AI
+                WMF/EMF<br/>Awaiting PDF
               </span>
             </div>
           ) : (
             <img
-              src={item.imageUrl}
+              src={displayImageUrl}
               alt={`POS #${item.posNumber}`}
-              className="formula-image max-w-48 max-h-32 object-contain"
+              className={`formula-image max-w-48 max-h-32 object-contain ${isRestored ? 'ring-2 ring-accent' : ''}`}
               loading="lazy"
             />
           )}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { FormulaItem, ParsedPDFEntry, ZipImageEntry } from '@/types/formula';
+import type { FormulaItem, ParsedPDFEntry, ZipImageEntry, SalvagedPDFImage } from '@/types/formula';
 import { matchImageToRef } from '@/utils/zipParser';
 
 export function useFormulaItems() {
@@ -25,7 +25,9 @@ export function useFormulaItems() {
           imageRef: entry.imageRef,
           imageName: matchedImage?.filename || null,
           imageUrl: matchedImage?.url || null,
-          imageBlob: matchedImage?.blob || null, // Store the original blob
+          imageBlob: matchedImage?.blob || null,
+          salvagedImageUrl: null,
+          salvagedImageBlob: null,
           status: matchedImage ? 'pending' : 'missing',
           latex: null,
           aiError: null,
@@ -34,6 +36,31 @@ export function useFormulaItems() {
       });
 
       setItems(newItems);
+    },
+    []
+  );
+
+  // Apply salvaged images from PDF to matching items
+  const applySalvagedImages = useCallback(
+    (salvagedImages: SalvagedPDFImage[]) => {
+      setItems((prev) => {
+        const salvagedMap = new Map<number, SalvagedPDFImage>();
+        salvagedImages.forEach((img) => salvagedMap.set(img.posNumber, img));
+
+        return prev.map((item) => {
+          const salvaged = salvagedMap.get(item.posNumber);
+          if (salvaged) {
+            return {
+              ...item,
+              salvagedImageUrl: salvaged.url,
+              salvagedImageBlob: salvaged.blob,
+              status: 'restored' as const,
+              aiError: null, // Clear previous errors since we have a good image now
+            };
+          }
+          return item;
+        });
+      });
     },
     []
   );
@@ -75,12 +102,24 @@ export function useFormulaItems() {
     setFilterStatus(null);
   }, []);
 
+  // Get counts for statistics
+  const stats = useMemo(() => ({
+    total: items.length,
+    restored: items.filter((i) => i.status === 'restored').length,
+    pending: items.filter((i) => i.status === 'pending').length,
+    verified: items.filter((i) => i.status === 'verified').length,
+    missing: items.filter((i) => i.status === 'missing').length,
+    needsModification: items.filter((i) => i.status === 'needs-modification').length,
+  }), [items]);
+
   return {
     items,
     filteredItems,
     filterStatus,
+    stats,
     setFilterStatus,
     buildItems,
+    applySalvagedImages,
     updateItemStatus,
     updateItemLatex,
     updateItemAiError,
