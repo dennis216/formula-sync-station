@@ -133,7 +133,7 @@ const Index = () => {
       const totalCount = pdfEntries.length;
       
       toast.success(
-        `Loaded ${totalCount} positions • ${restoredCount} restored from PDF`
+        `Loaded ${totalCount} positions • ${restoredCount} patched successfully`
       );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
