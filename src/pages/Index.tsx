@@ -9,6 +9,7 @@ import { useFormulaItems } from '@/hooks/useFormulaItems';
 import { parsePDFSimple } from '@/utils/pdfParser';
 import { parseZip, cleanupImageUrls } from '@/utils/zipParser';
 import { exportToJSON, exportToTXT, downloadFile } from '@/utils/exportUtils';
+import { exportToPDF, type PdfExportProgress } from '@/utils/pdfExport';
 import type { ZipImageEntry } from '@/types/formula';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw } from 'lucide-react';
@@ -211,6 +212,30 @@ const Index = () => {
     toast.success('Exported as TXT');
   };
 
+  const handleExportPDF = async () => {
+    if (items.length === 0) {
+      toast.error('没有可导出的项目');
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      await exportToPDF(items, (progress: PdfExportProgress) => {
+        setProcessingMessage(progress.message);
+        setProcessingProgress(Math.round((progress.current / progress.total) * 100));
+      });
+      
+      toast.success(`PDF 导出完成！共 ${items.length} 个项目`);
+    } catch (error) {
+      console.error('[PDF Export] Error:', error);
+      toast.error(`PDF 导出失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingProgress(undefined);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background grid-pattern">
       <Header />
@@ -256,6 +281,7 @@ const Index = () => {
               items={items}
               onExportJSON={handleExportJSON}
               onExportTXT={handleExportTXT}
+              onExportPDF={handleExportPDF}
               filterStatus={filterStatus}
               onFilterChange={setFilterStatus}
             />

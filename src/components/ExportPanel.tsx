@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, FileJson, FileText, Filter } from 'lucide-react';
+import { Download, FileJson, FileText, Filter, FileImage } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ interface ExportPanelProps {
   items: FormulaItem[];
   onExportJSON: () => void;
   onExportTXT: () => void;
+  onExportPDF: () => void;
   filterStatus: string | null;
   onFilterChange: (status: string | null) => void;
 }
@@ -21,6 +22,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
   items,
   onExportJSON,
   onExportTXT,
+  onExportPDF,
   filterStatus,
   onFilterChange,
 }) => {
@@ -88,12 +90,21 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Export */}
+          {/* PDF Export - Premium Button */}
+          <Button 
+            onClick={onExportPDF} 
+            className="action-button-cyan h-8"
+          >
+            <FileImage className="w-3 h-3 mr-2" />
+            导出 PDF (全量)
+          </Button>
+
+          {/* Other Exports */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="action-button-cyan h-8">
+              <Button variant="outline" size="sm" className="h-8">
                 <Download className="w-3 h-3 mr-2" />
-                Export
+                更多格式
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
