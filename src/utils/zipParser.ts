@@ -38,31 +38,41 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
     const skippedFiles: string[] = [];
     
     console.log(`[ZIP Parser] Processing archive: ${file.name}`);
-    console.log(`[ZIP Parser] Total files in archive: ${Object.keys(contents.files).length}`);
     
-    // Log all paths to help debug
     const allPaths = Object.keys(contents.files);
-    console.log('[ZIP Parser] All paths:', allPaths.slice(0, 20), allPaths.length > 20 ? `... and ${allPaths.length - 20} more` : '');
+    console.log(`[ZIP Parser] Total files in archive: ${allPaths.length}`);
     
-    // Priority folders to search (Word document structure)
-    const priorityFolders = ['word/media/', 'media/', 'images/', ''];
+    // Find all paths containing word/media/ (case-insensitive)
+    const mediaFiles = allPaths.filter(path => 
+      path.toLowerCase().includes('word/media/') || 
+      path.toLowerCase().includes('word\\media\\')
+    );
     
-    const filePromises = Object.entries(contents.files).map(async ([path, zipEntry]) => {
-      if (zipEntry.dir) return null;
+    console.log(`[ZIP Parser] Found ${mediaFiles.length} files in word/media/ folder`);
+    
+    // If no word/media/ found, fall back to scanning all image files
+    const pathsToProcess = mediaFiles.length > 0 ? mediaFiles : allPaths;
+    
+    if (mediaFiles.length === 0) {
+      console.warn('[ZIP Parser] No word/media/ folder found, scanning all directories for images');
+    }
+    
+    // Process ALL files without any limits
+    const filePromises = pathsToProcess.map(async (path) => {
+      const zipEntry = contents.files[path];
+      if (!zipEntry || zipEntry.dir) return null;
       
-      const filename = path.split('/').pop() || path;
+      const filename = path.split('/').pop() || path.split('\\').pop() || path;
       const extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
       
       // Skip unsupported formats with logging
       if (SKIPPED_EXTENSIONS.includes(extension)) {
         skippedFiles.push(filename);
-        console.warn(`[ZIP Parser] Skipping unsupported format: ${filename}`);
         return null;
       }
       
-      // Only process supported image formats
+      // Only process supported image formats (PNG/JPG/JPEG)
       if (!SUPPORTED_IMAGE_EXTENSIONS.includes(extension)) {
-        console.log(`[ZIP Parser] Ignoring non-image file: ${filename}`);
         return null;
       }
       
@@ -70,11 +80,9 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
         const blob = await zipEntry.async('blob');
         const url = URL.createObjectURL(blob);
         
-        console.log(`[ZIP Parser] Extracted: ${path}`);
-        
         return {
           filename,
-          path, // Keep full path for debugging
+          path,
           blob,
           url,
         };
@@ -86,6 +94,7 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
     
     const results = await Promise.all(filePromises);
     
+    // Collect ALL valid results - NO LIMITS
     for (const result of results) {
       if (result) {
         entries.push(result);
@@ -93,18 +102,18 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
     }
     
     if (skippedFiles.length > 0) {
-      console.warn(`[ZIP Parser] Skipped ${skippedFiles.length} unsupported files: ${skippedFiles.join(', ')}`);
+      console.warn(`[ZIP Parser] Skipped ${skippedFiles.length} unsupported formats (WMF/EMF/etc)`);
     }
     
-    // Sort entries using natural sort
+    // Natural sort by filename (image1, image2, ..., image10, image11, ...)
     entries.sort((a, b) => naturalSort(a.filename, b.filename));
     
-    console.log(`[ZIP Parser] Successfully extracted ${entries.length} images (sorted by natural order)`);
+    console.log(`[ZIP Parser] ✅ Extracted ${entries.length} images total (natural sorted)`);
     
     return entries;
   } catch (error) {
     console.error('[ZIP Parser] Failed to parse ZIP:', error);
-    return []; // Return empty array instead of throwing
+    return [];
   }
 }
 
