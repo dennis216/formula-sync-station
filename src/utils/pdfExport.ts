@@ -189,6 +189,26 @@ export async function exportToPDF(
         pdf.setTextColor(0, 0, 0);
         currentY += 15;
       }
+    } else if (item.imageUrl === '/placeholder.svg') {
+      // WMF/EMF format - cannot be displayed in PDF
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(180, 100, 50);
+      pdf.text('[WMF/EMF格式 - 无法直接显示]', marginLeft, currentY + 5);
+      
+      // If LaTeX is available, show it instead
+      if (item.latex && !item.latex.startsWith('ERROR:')) {
+        pdf.setTextColor(60, 60, 60);
+        pdf.setFont('courier', 'normal');
+        pdf.setFontSize(8);
+        const latexPreview = item.latex.length > 80 ? item.latex.substring(0, 80) + '...' : item.latex;
+        pdf.text(`LaTeX: ${latexPreview}`, marginLeft, currentY + 12);
+        currentY += 20;
+      } else {
+        pdf.text('[请使用 AI 识别获取 LaTeX]', marginLeft + 100, currentY + 5);
+        currentY += 15;
+      }
+      pdf.setTextColor(0, 0, 0);
     } else {
       // No image available - draw placeholder
       pdf.setFontSize(9);

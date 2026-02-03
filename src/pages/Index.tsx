@@ -55,7 +55,7 @@ const Index = () => {
 
     try {
       // Clean up previous URLs
-      cleanupImageUrls(zipImages.map((img) => img.url));
+      cleanupImageUrls(zipImages);
 
       // Step 1: Parse ZIP (primary data source)
       setProcessingMessage('Extracting images from archive...');
@@ -138,7 +138,7 @@ const Index = () => {
   };
 
   const handleReset = () => {
-    cleanupImageUrls(zipImages.map((img) => img.url));
+    cleanupImageUrls(zipImages);
     setZipFile(null);
     setPdfFile(null);
     setZipImages([]);

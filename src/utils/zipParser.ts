@@ -1,10 +1,15 @@
 import JSZip from 'jszip';
 import type { ZipImageEntry } from '@/types/formula';
 
-// Supported image formats (browser-compatible)
-const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
-// Legacy formats that we skip with a warning
-const SKIPPED_EXTENSIONS = ['.wmf', '.emf', '.tiff', '.wdp', '.pcz'];
+// Browser-displayable formats
+const DISPLAYABLE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+// Legacy formats - extract blob but use placeholder for preview
+const LEGACY_EXTENSIONS = ['.wmf', '.emf'];
+// All supported formats for extraction
+const ALL_SUPPORTED_EXTENSIONS = [...DISPLAYABLE_EXTENSIONS, ...LEGACY_EXTENSIONS];
+
+// Placeholder URL for non-displayable formats
+const PLACEHOLDER_URL = '/placeholder.svg';
 
 // Natural sort comparator for filenames (image1 < image2 < image10)
 function naturalSort(a: string, b: string): number {
@@ -35,80 +40,80 @@ export async function parseZip(file: File): Promise<ZipImageEntry[]> {
     const contents = await zip.loadAsync(file);
     
     const entries: ZipImageEntry[] = [];
-    const skippedFiles: string[] = [];
+    let wmfCount = 0;
+    let displayableCount = 0;
     
     console.log(`[ZIP Parser] Processing archive: ${file.name}`);
     
     const allPaths = Object.keys(contents.files);
     console.log(`[ZIP Parser] Total files in archive: ${allPaths.length}`);
     
-    // Find all paths containing word/media/ (case-insensitive)
-    const mediaFiles = allPaths.filter(path => 
-      path.toLowerCase().includes('word/media/') || 
-      path.toLowerCase().includes('word\\media\\')
-    );
+    // STRICT: Only process files starting with word/media/ (case-insensitive)
+    const mediaFiles = allPaths.filter(path => {
+      const lowerPath = path.toLowerCase();
+      return lowerPath.startsWith('word/media/') || lowerPath.startsWith('word\\media\\');
+    });
     
     console.log(`[ZIP Parser] Found ${mediaFiles.length} files in word/media/ folder`);
     
-    // If no word/media/ found, fall back to scanning all image files
-    const pathsToProcess = mediaFiles.length > 0 ? mediaFiles : allPaths;
-    
+    // If no word/media/ found, fall back to scanning all paths that CONTAIN word/media
+    let pathsToProcess = mediaFiles;
     if (mediaFiles.length === 0) {
-      console.warn('[ZIP Parser] No word/media/ folder found, scanning all directories for images');
+      pathsToProcess = allPaths.filter(path => {
+        const lowerPath = path.toLowerCase();
+        return lowerPath.includes('word/media/') || lowerPath.includes('word\\media\\');
+      });
+      
+      if (pathsToProcess.length === 0) {
+        console.warn('[ZIP Parser] No word/media/ folder found, scanning all directories for images');
+        pathsToProcess = allPaths;
+      }
     }
     
-    // Process ALL files without any limits
-    const filePromises = pathsToProcess.map(async (path) => {
+    // Process ALL files - NO LIMITS, NO SLICE
+    for (const path of pathsToProcess) {
       const zipEntry = contents.files[path];
-      if (!zipEntry || zipEntry.dir) return null;
+      if (!zipEntry || zipEntry.dir) continue;
       
       const filename = path.split('/').pop() || path.split('\\').pop() || path;
       const extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
       
-      // Skip unsupported formats with logging
-      if (SKIPPED_EXTENSIONS.includes(extension)) {
-        skippedFiles.push(filename);
-        return null;
-      }
-      
-      // Only process supported image formats (PNG/JPG/JPEG)
-      if (!SUPPORTED_IMAGE_EXTENSIONS.includes(extension)) {
-        return null;
+      // Skip completely unsupported formats (not image-related)
+      if (!ALL_SUPPORTED_EXTENSIONS.includes(extension)) {
+        continue;
       }
       
       try {
         const blob = await zipEntry.async('blob');
-        const url = URL.createObjectURL(blob);
+        const isLegacyFormat = LEGACY_EXTENSIONS.includes(extension);
         
-        return {
+        // For WMF/EMF: preserve blob but use placeholder for preview (memory safe)
+        const url = isLegacyFormat ? PLACEHOLDER_URL : URL.createObjectURL(blob);
+        
+        if (isLegacyFormat) {
+          wmfCount++;
+        } else {
+          displayableCount++;
+        }
+        
+        entries.push({
           filename,
           path,
           blob,
           url,
-        };
+          isPlaceholder: isLegacyFormat,
+        });
       } catch (error) {
         console.error(`[ZIP Parser] Failed to extract ${filename}:`, error);
-        return null;
       }
-    });
-    
-    const results = await Promise.all(filePromises);
-    
-    // Collect ALL valid results - NO LIMITS
-    for (const result of results) {
-      if (result) {
-        entries.push(result);
-      }
-    }
-    
-    if (skippedFiles.length > 0) {
-      console.warn(`[ZIP Parser] Skipped ${skippedFiles.length} unsupported formats (WMF/EMF/etc)`);
     }
     
     // Natural sort by filename (image1, image2, ..., image10, image11, ...)
     entries.sort((a, b) => naturalSort(a.filename, b.filename));
     
-    console.log(`[ZIP Parser] ✅ Extracted ${entries.length} images total (natural sorted)`);
+    console.log(`[ZIP Parser] ✅ Extracted ${entries.length} images total:`);
+    console.log(`   - Displayable (PNG/JPG): ${displayableCount}`);
+    console.log(`   - Legacy (WMF/EMF with placeholder): ${wmfCount}`);
     
     return entries;
   } catch (error) {
@@ -162,12 +167,15 @@ export function matchImageToRef(
   return null;
 }
 
-export function cleanupImageUrls(urls: string[]): void {
-  urls.forEach(url => {
-    try {
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      // Ignore errors
+export function cleanupImageUrls(images: ZipImageEntry[]): void {
+  images.forEach(img => {
+    // Only revoke blob URLs, not placeholder URLs
+    if (!img.isPlaceholder && img.url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(img.url);
+      } catch (e) {
+        // Ignore errors
+      }
     }
   });
 }

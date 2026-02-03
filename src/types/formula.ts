@@ -16,6 +16,8 @@ export interface ParsedPDFEntry {
 
 export interface ZipImageEntry {
   filename: string;
+  path: string;
   blob: Blob;
   url: string;
+  isPlaceholder: boolean; // true if WMF/EMF (can't preview but blob is preserved)
 }
