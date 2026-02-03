@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { FormulaItem, ParsedPDFEntry, ZipImageEntry, SalvagedPDFImage } from '@/types/formula';
+import type { FormulaItem, ParsedPDFEntry, ZipImageEntry, SalvagedZipImage } from '@/types/formula';
 import { matchImageToRef } from '@/utils/zipParser';
 
 export function useFormulaItems() {
@@ -40,15 +40,28 @@ export function useFormulaItems() {
     []
   );
 
-  // Apply salvaged images from PDF to matching items
+  /**
+   * Apply salvaged images from ZIP to matching items.
+   * Matches by extracting the number from the original imageName (e.g., image70.wmf -> 70)
+   * and comparing it to the salvaged image's imageNumber.
+   */
   const applySalvagedImages = useCallback(
-    (salvagedImages: SalvagedPDFImage[]) => {
+    (salvagedImages: SalvagedZipImage[]) => {
       setItems((prev) => {
-        const salvagedMap = new Map<number, SalvagedPDFImage>();
-        salvagedImages.forEach((img) => salvagedMap.set(img.posNumber, img));
+        // Build a map: imageNumber -> SalvagedZipImage
+        const salvagedMap = new Map<number, SalvagedZipImage>();
+        salvagedImages.forEach((img) => salvagedMap.set(img.imageNumber, img));
 
         return prev.map((item) => {
-          const salvaged = salvagedMap.get(item.posNumber);
+          // Extract the number from the original image filename (e.g., image70.wmf -> 70)
+          const originalName = item.imageName || item.imageRef || '';
+          const numberMatch = originalName.match(/(\d+)/);
+          
+          if (!numberMatch) return item;
+          
+          const imageNumber = parseInt(numberMatch[1], 10);
+          const salvaged = salvagedMap.get(imageNumber);
+          
           if (salvaged) {
             return {
               ...item,

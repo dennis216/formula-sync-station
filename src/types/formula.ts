@@ -33,3 +33,11 @@ export interface SalvagedPDFImage {
   url: string;
   pageNumber: number;
 }
+
+export interface SalvagedZipImage {
+  /** The number extracted from the filename (e.g., image70.png -> 70) */
+  imageNumber: number;
+  filename: string;
+  blob: Blob;
+  url: string;
+}
