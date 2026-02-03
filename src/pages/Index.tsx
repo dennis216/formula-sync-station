@@ -8,10 +8,8 @@ import { ProcessingOverlay } from '@/components/ProcessingOverlay';
 import { useFormulaItems } from '@/hooks/useFormulaItems';
 import { parseZip, cleanupImageUrls } from '@/utils/zipParser';
 import { parseSalvageZip, cleanupSalvagedZipUrls } from '@/utils/salvageZipParser';
-import { parseDocumentXml, type ParsedDocument } from '@/utils/docxParser';
 import { exportToJSON, exportToTXT, downloadFile } from '@/utils/exportUtils';
 import { exportToPDF, type PdfExportProgress } from '@/utils/pdfExport';
-import { exportStudyGuide, type StudyGuideProgress } from '@/utils/studyGuideExport';
 import type { ZipImageEntry, SalvagedZipImage } from '@/types/formula';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw } from 'lucide-react';
@@ -25,7 +23,6 @@ const Index = () => {
   const [processingProgress, setProcessingProgress] = useState<number | undefined>();
   const [baseZipImages, setBaseZipImages] = useState<ZipImageEntry[]>([]);
   const [salvagedImages, setSalvagedImages] = useState<SalvagedZipImage[]>([]);
-  const [parsedDocument, setParsedDocument] = useState<ParsedDocument | null>(null);
   const [hasProcessed, setHasProcessed] = useState(false);
 
   const {
@@ -89,23 +86,9 @@ const Index = () => {
 
       console.log(`[Process] Found ${images.length} images in base ZIP`);
 
-      // Step 2: Parse document.xml to get document structure (text + image positions)
-      setProcessingMessage('Parsing document structure...');
-      setProcessingProgress(25);
-      
-      let docStructure: ParsedDocument | null = null;
-      try {
-        docStructure = await parseDocumentXml(baseZipFile);
-        setParsedDocument(docStructure);
-        console.log(`[Process] Document structure: ${docStructure.elements.length} elements, ${docStructure.imageCount} images`);
-      } catch (docError) {
-        console.warn('[Process] Document parsing failed (non-critical):', docError);
-        // Continue without document structure - will use image-only mode
-      }
-
-      // Step 3: Build initial items from ZIP (POS order based on filenames)
+      // Step 2: Build initial items from ZIP (POS order based on filenames)
       setProcessingMessage('Building formula list from original document...');
-      setProcessingProgress(40);
+      setProcessingProgress(35);
       
       // Generate POS entries from ZIP images (natural sorted order)
       const pdfEntries = images.map((img, index) => ({
@@ -116,12 +99,12 @@ const Index = () => {
       buildItems(pdfEntries, images, true);
       console.log(`[Process] Built ${pdfEntries.length} items from base ZIP`);
 
-      // Step 4: If salvage ZIP is provided, extract and match images by filename number
+      // Step 3: If salvage ZIP is provided, extract and match images by filename number
       let extractedSalvaged: SalvagedZipImage[] = [];
       
       if (salvageZipFile) {
         setProcessingMessage('Extracting salvaged PNGs from patch ZIP...');
-        setProcessingProgress(60);
+        setProcessingProgress(55);
         
         try {
           extractedSalvaged = await parseSalvageZip(salvageZipFile);
@@ -130,7 +113,7 @@ const Index = () => {
           
           if (extractedSalvaged.length > 0) {
             setProcessingMessage('Matching and stitching images...');
-            setProcessingProgress(80);
+            setProcessingProgress(75);
             applySalvagedImages(extractedSalvaged);
             
             toast.success(`${extractedSalvaged.length} Images Salvaged and stitched!`);
@@ -169,7 +152,6 @@ const Index = () => {
     setSalvageZipFile(null);
     setBaseZipImages([]);
     setSalvagedImages([]);
-    setParsedDocument(null);
     clearItems();
     setHasProcessed(false);
     toast.info('Workspace cleared');
@@ -313,35 +295,6 @@ const Index = () => {
     }
   };
 
-  const handleExportStudyGuide = async () => {
-    if (items.length === 0) {
-      toast.error('No items to export');
-      return;
-    }
-
-    if (!parsedDocument) {
-      toast.error('No document structure available. Please upload a DOCX ZIP file.');
-      return;
-    }
-
-    setIsProcessing(true);
-    
-    try {
-      await exportStudyGuide(parsedDocument, items, (progress: StudyGuideProgress) => {
-        setProcessingMessage(progress.message);
-        setProcessingProgress(Math.round((progress.current / progress.total) * 100));
-      });
-      
-      toast.success(`Study Guide generated! ${parsedDocument.elements.length} elements exported.`);
-    } catch (error) {
-      console.error('[Study Guide Export] Error:', error);
-      toast.error(`Study Guide export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsProcessing(false);
-      setProcessingProgress(undefined);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background grid-pattern">
       <Header />
@@ -390,10 +343,8 @@ const Index = () => {
               onExportJSON={handleExportJSON}
               onExportTXT={handleExportTXT}
               onExportPDF={handleExportPDF}
-              onExportStudyGuide={handleExportStudyGuide}
               filterStatus={filterStatus}
               onFilterChange={setFilterStatus}
-              hasDocumentStructure={!!parsedDocument && parsedDocument.elements.length > 0}
             />
 
             <FormulaList

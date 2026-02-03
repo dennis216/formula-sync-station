@@ -1,8 +1,12 @@
 import JSZip from 'jszip';
-import type { SalvagedZipImage } from '@/types/formula';
 
-// Re-export for convenience
-export type { SalvagedZipImage } from '@/types/formula';
+export interface SalvagedZipImage {
+  /** The number extracted from the filename (e.g., image70.png -> 70) */
+  imageNumber: number;
+  filename: string;
+  blob: Blob;
+  url: string;
+}
 
 // Displayable image extensions
 const DISPLAYABLE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
