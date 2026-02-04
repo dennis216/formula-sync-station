@@ -1,8 +1,9 @@
 import React, { useState, memo } from 'react';
-import { Sparkles, ImageOff, Loader2, RefreshCcw } from 'lucide-react';
+import { Sparkles, ImageOff, Loader2, RefreshCcw, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from './StatusBadge';
 import { LaTeXPreview } from './LaTeXPreview';
+import { toast } from 'sonner';
 import type { FormulaItem as FormulaItemType } from '@/types/formula';
 
 interface FormulaItemProps {
@@ -19,12 +20,82 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
   onAiRecognize,
 }) => {
   const [showLatex, setShowLatex] = useState(!!item.latex);
+  const [isCopying, setIsCopying] = useState(false);
+  const [justCopied, setJustCopied] = useState(false);
 
   const cycleStatus = () => {
     const statusOrder: FormulaItemType['status'][] = ['pending', 'verified', 'needs-modification', 'restored'];
     const currentIndex = statusOrder.indexOf(item.status);
     const nextIndex = (currentIndex + 1) % statusOrder.length;
     onStatusChange(item.id, statusOrder[nextIndex]);
+  };
+
+  const handleCopyImage = async () => {
+    // Only works with salvaged PNG images
+    if (!item.salvagedImageBlob) {
+      toast.error('No image data available to copy');
+      return;
+    }
+
+    setIsCopying(true);
+
+    try {
+      // Ensure we have a PNG blob for clipboard compatibility
+      let pngBlob = item.salvagedImageBlob;
+      
+      // If it's not already a PNG, we need to convert it
+      if (item.salvagedImageBlob.type !== 'image/png') {
+        // Create an image element and draw to canvas for conversion
+        const img = new Image();
+        const url = URL.createObjectURL(item.salvagedImageBlob);
+        
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Failed to get canvas context'));
+              return;
+            }
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob((blob) => {
+              if (blob) {
+                pngBlob = blob;
+                resolve();
+              } else {
+                reject(new Error('Failed to convert image to PNG'));
+              }
+            }, 'image/png');
+          };
+          img.onerror = () => reject(new Error('Failed to load image'));
+          img.src = url;
+        });
+        
+        URL.revokeObjectURL(url);
+      }
+
+      // Use the Clipboard API to copy the image
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': pngBlob
+        })
+      ]);
+
+      setJustCopied(true);
+      toast.success(`POS #${item.posNumber} copied to clipboard`);
+      
+      // Reset the "Copied!" state after 2 seconds
+      setTimeout(() => {
+        setJustCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy image:', error);
+      toast.error('Failed to copy image to clipboard');
+    } finally {
+      setIsCopying(false);
+    }
   };
 
   // Determine which image to display - prioritize salvaged image
@@ -57,7 +128,7 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
         </div>
 
         {/* Image Display */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 flex flex-col gap-2">
           {item.status === 'missing' || !displayImageUrl ? (
             <div className="w-32 h-24 formula-image flex flex-col items-center justify-center gap-2 bg-destructive/10 border-destructive/30">
               <ImageOff className="w-8 h-8 text-destructive/60" />
@@ -67,7 +138,7 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
             <div className="w-32 h-24 formula-image flex flex-col items-center justify-center gap-2 bg-accent/20 border-accent/40">
               <Sparkles className="w-8 h-8 text-accent" />
               <span className="text-xs text-accent uppercase tracking-wider text-center px-1">
-                WMF/EMF<br/>Awaiting PDF
+                WMF/EMF<br/>Awaiting Patch
               </span>
             </div>
           ) : (
@@ -77,6 +148,34 @@ export const FormulaItem: React.FC<FormulaItemProps> = memo(({
               className={`formula-image max-w-48 max-h-32 object-contain ${isRestored ? 'ring-2 ring-accent' : ''}`}
               loading="lazy"
             />
+          )}
+          
+          {/* Copy Image Button - only show for restored items with salvaged blob */}
+          {isRestored && item.salvagedImageBlob && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCopyImage}
+              disabled={isCopying}
+              className="h-6 px-2 text-xs w-fit"
+            >
+              {justCopied ? (
+                <>
+                  <Check className="w-3 h-3 mr-1 text-accent" />
+                  Copied!
+                </>
+              ) : isCopying ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  Copying...
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3 mr-1" />
+                  Copy Image
+                </>
+              )}
+            </Button>
           )}
         </div>
 
