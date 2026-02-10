@@ -1,5 +1,6 @@
 import React from 'react';
-import { Database, Cpu } from 'lucide-react';
+import { Cpu } from 'lucide-react';
+import appIcon from '@/assets/app-icon.png';
 
 export const Header: React.FC = () => {
   return (
