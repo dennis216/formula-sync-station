@@ -9,7 +9,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-sm glow-border">
-              <Database className="w-6 h-6 text-primary" />
+              <img src={appIcon} alt="Formula Archive Station" className="w-6 h-6" />
             </div>
             <div>
               <h1 className="text-lg font-bold uppercase tracking-wider text-foreground text-glow">
